@@ -25,7 +25,9 @@ Guida completa (backtest, dry-run, passaggio al live con 50€):
 - **Framework:** [Freqtrade](https://www.freqtrade.io) (Docker, `restart: unless-stopped` → 24/7)
 - **Exchange:** Kraken — spot, stake in EUR, **long-only, nessuna leva**
 - **Strategia:** `user_data/strategies/StarterStrategy.py` — baseline semplice e
-  anti-overfitting (filtro di trend EMA200 + entrata su pullback RSI)
+  anti-overfitting (filtro di trend EMA200 + entrata su pullback RSI). Variante
+  **long + short** (buy *e* sell) in `StarterStrategyLS.py` + `config-futures.json`
+  ⚠️ futures/leva, più rischiosa — vedi doc dedicato.
 - **Rischio:** stoploss + trailing + ROI + `protections` (MaxDrawdown,
   StoplossGuard, CooldownPeriod) come circuit breaker
 - **Sicurezza:** dry-run di default, chiavi API solo per il live (trade-only, no
@@ -38,6 +40,9 @@ Guida completa (backtest, dry-run, passaggio al live con 50€):
 - 📈 **[Backtest su Solana](docs/backtest-solana.md)** — backtest reale della
   strategia sullo storico di SOL (2021-2024) con risultati, grafico e lettura
   onesta (vs "compra e tieni").
+- 🔀 **[Buy & Sell + dati 1h](docs/buy-and-sell-e-dati-1h.md)** — strategia
+  long + short (vendita allo scoperto, futures: più rischiosa) con backtest
+  reale, e come procurare lo storico a 1 ora (il "ponte GitHub").
 - 📄 **[Analisi completa](docs/analisi-completa.md)** — analisi approfondita di
   architettura, strategie, gestione del rischio, dati, backtesting, stack
   tecnologico, aspetti legali/fiscali, costi e roadmap di sviluppo.

@@ -1,0 +1,17 @@
+side,entry_date,exit_date,bars_held,return_pct,reason
+long,2021-07-22,2021-07-23,1,4.965,trailing
+long,2021-12-12,2021-12-13,1,-10.279,stoploss
+long,2021-12-15,2021-12-16,1,14.209,trailing
+long,2022-01-13,2022-01-14,1,1.47,trailing
+short,2022-03-29,2022-03-30,1,-10.341,stoploss
+short,2022-04-07,2022-04-08,1,1.762,trailing
+short,2022-11-07,2022-11-08,1,32.353,trailing
+short,2023-01-25,2023-01-26,1,-10.341,stoploss
+short,2023-01-29,2023-01-30,1,-0.31,roi
+short,2023-01-31,2023-02-01,1,3.617,trailing
+short,2023-04-16,2023-04-19,3,6.022,trailing
+long,2024-04-15,2024-04-16,1,-10.279,stoploss
+long,2024-04-19,2024-04-20,1,4.447,trailing
+long,2024-05-02,2024-05-03,1,5.02,trailing
+long,2024-06-25,2024-06-26,1,3.352,trailing
+long,2024-08-07,2024-08-08,1,10.301,trailing
