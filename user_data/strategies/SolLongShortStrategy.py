@@ -37,9 +37,10 @@ class SolLongShortStrategy(IStrategy):
     can_short = True
 
     # ===== INTERRUTTORE PRINCIPALE =====
-    # False = solo long (MASSIMO RENDIMENTO sui dati di SOL) -> CONSIGLIATO.
-    # True  = abilita anche gli short selettivi (come da tua richiesta).
-    enable_shorts = False
+    # True  = long + short (TUA SCELTA esplicita e confermata).
+    # False = solo long: sui dati di SOL rende di piu' (+2182% vs +44%) con meno
+    #         drawdown. Se vuoi il MASSIMO RENDIMENTO, metti False.
+    enable_shorts = True
 
     process_only_new_candles = True
     use_exit_signal = True
