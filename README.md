@@ -43,6 +43,9 @@ Guida completa (backtest, dry-run, passaggio al live con 50€):
 - 🔀 **[Buy & Sell + dati 1h](docs/buy-and-sell-e-dati-1h.md)** — strategia
   long + short (vendita allo scoperto, futures: più rischiosa) con backtest
   reale, e come procurare lo storico a 1 ora (il "ponte GitHub").
+- 🚀 **[Miglioramento performance](docs/miglioramento-performance.md)** — la
+  variante **trend-following** (`TrendFollowStrategy`) che sui dati di SOL ha
+  reso molto di più (con i caveat onesti su overfitting e drawdown).
 - 📄 **[Analisi completa](docs/analisi-completa.md)** — analisi approfondita di
   architettura, strategie, gestione del rischio, dati, backtesting, stack
   tecnologico, aspetti legali/fiscali, costi e roadmap di sviluppo.
