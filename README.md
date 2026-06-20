@@ -46,6 +46,9 @@ Guida completa (backtest, dry-run, passaggio al live con 50€):
 - 🚀 **[Miglioramento performance](docs/miglioramento-performance.md)** — la
   variante **trend-following** (`TrendFollowStrategy`) che sui dati di SOL ha
   reso molto di più (con i caveat onesti su overfitting e drawdown).
+- 🔬 **[Validazione 1h multi-asset](docs/validazione-1h-multiasset.md)** — la
+  prova del nove su SOL/BTC/ETH a 1h: la strategia **non generalizza** (ottima su
+  SOL, perde su BTC). La lezione più importante: niente overfitting.
 - 📄 **[Analisi completa](docs/analisi-completa.md)** — analisi approfondita di
   architettura, strategie, gestione del rischio, dati, backtesting, stack
   tecnologico, aspetti legali/fiscali, costi e roadmap di sviluppo.
