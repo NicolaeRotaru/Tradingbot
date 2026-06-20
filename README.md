@@ -35,6 +35,9 @@ Guida completa (backtest, dry-run, passaggio al live con 50€):
 
 - 🛠️ **[Guida operativa](docs/setup-freqtrade.md)** — setup, backtest, paper
   trading e checklist per il passaggio al live.
+- 📈 **[Backtest su Solana](docs/backtest-solana.md)** — backtest reale della
+  strategia sullo storico di SOL (2021-2024) con risultati, grafico e lettura
+  onesta (vs "compra e tieni").
 - 📄 **[Analisi completa](docs/analisi-completa.md)** — analisi approfondita di
   architettura, strategie, gestione del rischio, dati, backtesting, stack
   tecnologico, aspetti legali/fiscali, costi e roadmap di sviluppo.
