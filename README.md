@@ -3,11 +3,38 @@
 Progetto per un trading bot autonomo, sempre attivo (24/7), che analizza in
 tempo reale dati di mercato, notizie e segnali alternativi.
 
-> ⚠️ **Stato attuale:** fase di analisi e progettazione. Nessuna logica di
-> trading è ancora implementata. **Non usare con denaro reale.**
+> ⚠️ **Stato attuale:** bot funzionante in **paper trading (dry-run)** basato su
+> Freqtrade, exchange Kraken. **Live disabilitato di default.** Non usare con
+> denaro reale finché non hai completato backtest + paper trading (vedi guida).
+
+## 🚀 Avvio rapido (paper trading)
+
+Richiede Docker. Il bot parte già in dry-run (portafoglio simulato da 50€):
+
+```bash
+docker compose pull
+docker compose up -d        # avvia il bot (sempre acceso)
+docker compose logs -f      # log in tempo reale
+```
+
+Guida completa (backtest, dry-run, passaggio al live con 50€):
+**[docs/setup-freqtrade.md](docs/setup-freqtrade.md)**.
+
+## Com'è fatto
+
+- **Framework:** [Freqtrade](https://www.freqtrade.io) (Docker, `restart: unless-stopped` → 24/7)
+- **Exchange:** Kraken — spot, stake in EUR, **long-only, nessuna leva**
+- **Strategia:** `user_data/strategies/StarterStrategy.py` — baseline semplice e
+  anti-overfitting (filtro di trend EMA200 + entrata su pullback RSI)
+- **Rischio:** stoploss + trailing + ROI + `protections` (MaxDrawdown,
+  StoplossGuard, CooldownPeriod) come circuit breaker
+- **Sicurezza:** dry-run di default, chiavi API solo per il live (trade-only, no
+  prelievo), segreti fuori dal repo
 
 ## Documentazione
 
+- 🛠️ **[Guida operativa](docs/setup-freqtrade.md)** — setup, backtest, paper
+  trading e checklist per il passaggio al live.
 - 📄 **[Analisi completa](docs/analisi-completa.md)** — analisi approfondita di
   architettura, strategie, gestione del rischio, dati, backtesting, stack
   tecnologico, aspetti legali/fiscali, costi e roadmap di sviluppo.
@@ -39,5 +66,8 @@ applicabili nella tua giurisdizione prima di operare.
 
 ## Prossimi passi
 
-Vedi la sezione "Decisioni che servono da te per procedere" in fondo all'
-[analisi completa](docs/analisi-completa.md#14-conclusione-e-prossimo-passo).
+1. Esegui il **backtest** su dati Binance e leggi il report (max drawdown, Sharpe).
+2. Tieni il bot in **paper trading** per settimane e confrontalo col backtest.
+3. Solo dopo, valuta il **live con 50€** seguendo la checklist di sicurezza.
+
+Tutti i dettagli e i comandi sono nella **[guida operativa](docs/setup-freqtrade.md)**.

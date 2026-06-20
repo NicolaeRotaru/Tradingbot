@@ -1,0 +1,9 @@
+{
+    "_commento": "TEMPLATE alternativo per le chiavi live. Copia in 'config-private.json' (gia' in .gitignore) e usalo SOLO quando passi al live, sovrapponendolo al config principale: aggiungi -c user_data/config-private.json al comando. In dry-run NON serve. In alternativa puoi usare il file .env (vedi .env.example): scegli UN metodo solo.",
+
+    "dry_run": false,
+    "exchange": {
+        "key": "LA_TUA_KRAKEN_API_KEY",
+        "secret": "LA_TUA_KRAKEN_PRIVATE_KEY"
+    }
+}

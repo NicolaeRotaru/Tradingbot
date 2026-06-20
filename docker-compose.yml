@@ -1,0 +1,29 @@
+# Trading bot — Freqtrade su Kraken (paper-first)
+#
+# Avvio in dry-run (paper trading):  docker compose up -d
+# Log in tempo reale:                docker compose logs -f
+# Stop:                              docker compose down
+#
+# "restart: unless-stopped" = il bot resta sempre acceso e si riavvia da solo
+# dopo crash o riavvio della macchina (il tuo requisito 24/7).
+
+services:
+  freqtrade:
+    image: freqtradeorg/freqtrade:stable
+    container_name: tradingbot
+    restart: unless-stopped
+    # FreqUI / API server solo in locale (127.0.0.1) per sicurezza.
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - "./user_data:/freqtrade/user_data"
+    # Per il LIVE: crea il file .env (vedi .env.example) e DECOMMENTA la riga sotto.
+    # In dry-run NON serve: lascia pure commentato.
+    # env_file:
+    #   - .env
+    command: >
+      trade
+      --logfile /freqtrade/user_data/logs/freqtrade.log
+      --db-url sqlite:////freqtrade/user_data/tradesv3.sqlite
+      --config /freqtrade/user_data/config.json
+      --strategy StarterStrategy
