@@ -46,6 +46,10 @@ Guida completa (backtest, dry-run, passaggio al live con 50€):
 - 🚀 **[Miglioramento performance](docs/miglioramento-performance.md)** — la
   variante **trend-following** (`TrendFollowStrategy`) che sui dati di SOL ha
   reso molto di più (con i caveat onesti su overfitting e drawdown).
+- 🎯 **[Strategia definitiva SOL](docs/strategia-sol-definitiva.md)** — bot
+  **solo su SOL**, Kraken Futures, long+short (`SolLongShortStrategy`), validato
+  sui dati 1h reali: perché su SOL conviene il **solo long**, setup futures, PAC
+  €500/mese e i compromessi onesti.
 - 🔬 **[Validazione 1h multi-asset](docs/validazione-1h-multiasset.md)** — la
   prova del nove su SOL/BTC/ETH a 1h: la strategia **non generalizza** (ottima su
   SOL, perde su BTC). La lezione più importante: niente overfitting.

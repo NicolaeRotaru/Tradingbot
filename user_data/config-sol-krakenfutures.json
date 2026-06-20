@@ -1,0 +1,77 @@
+{
+    "$schema": "https://schema.freqtrade.io/schema.json",
+    "bot_name": "sol-bot-krakenfutures",
+
+    "_commento": "Bot SOLO SOL su Kraken Futures (perpetuo SOL/USD:USD), long+short, leva 1x. DRY-RUN di default. Size piena: stake 'unlimited' su 1 sola operazione = quasi tutto il saldo per trade, e SCALA da solo quando versi i 500 EUR/mese. Per il LIVE: chiavi da futures.kraken.com (solo trading, NO prelievo) nel file .env, e dry_run:false. ATTENZIONE: i futures usano margine; con leva>1 rischi la LIQUIDAZIONE -> qui leva 1x.",
+
+    "max_open_trades": 1,
+    "stake_currency": "USD",
+    "stake_amount": "unlimited",
+    "tradable_balance_ratio": 0.95,
+    "fiat_display_currency": "EUR",
+
+    "dry_run": true,
+    "dry_run_wallet": 500,
+    "cancel_open_orders_on_exit": false,
+
+    "trading_mode": "futures",
+    "margin_mode": "isolated",
+    "timeframe": "1h",
+
+    "unfilledtimeout": {
+        "entry": 10,
+        "exit": 10,
+        "exit_timeout_count": 0,
+        "unit": "minutes"
+    },
+
+    "entry_pricing": {
+        "price_side": "same",
+        "use_order_book": true,
+        "order_book_top": 1
+    },
+    "exit_pricing": {
+        "price_side": "same",
+        "use_order_book": true,
+        "order_book_top": 1
+    },
+
+    "exchange": {
+        "name": "krakenfutures",
+        "key": "",
+        "secret": "",
+        "ccxt_config": { "enableRateLimit": true },
+        "ccxt_async_config": { "enableRateLimit": true },
+        "pair_whitelist": [
+            "SOL/USD:USD"
+        ],
+        "pair_blacklist": []
+    },
+
+    "pairlists": [
+        { "method": "StaticPairList" }
+    ],
+
+    "telegram": {
+        "enabled": false,
+        "token": "",
+        "chat_id": ""
+    },
+
+    "api_server": {
+        "enabled": true,
+        "listen_ip_address": "0.0.0.0",
+        "listen_port": 8080,
+        "verbosity": "error",
+        "enable_openapi": false,
+        "jwt_secret_key": "CAMBIAMI_con_una_stringa_casuale_lunga",
+        "ws_token": "CAMBIAMI_token_websocket",
+        "CORS_origins": [],
+        "username": "freqtrader",
+        "password": "CAMBIAMI_password_freqUI"
+    },
+
+    "initial_state": "running",
+    "force_entry_enable": false,
+    "internals": { "process_throttle_secs": 5 }
+}
