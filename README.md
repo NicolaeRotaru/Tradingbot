@@ -11,6 +11,12 @@ tempo reale dati di mercato, notizie e segnali alternativi.
 - 📄 **[Analisi completa](docs/analisi-completa.md)** — analisi approfondita di
   architettura, strategie, gestione del rischio, dati, backtesting, stack
   tecnologico, aspetti legali/fiscali, costi e roadmap di sviluppo.
+- 🚀 **[Potenziamento v2](docs/potenziamento-v2.md)** — le 8 leve concrete che
+  aumentano il rendimento netto corretto per il rischio (esecuzione, drawdown,
+  capitale, alpha robusto, anti-overfitting) con roadmap prioritizzata.
+- 🧠 **[Mentalità da esperti](docs/mentalita-esperti.md)** — come ragionano i
+  quant, i market maker e i ricercatori che costruiscono davvero questi sistemi:
+  i 20 principi e modelli mentali di prim'ordine.
 
 ## In sintesi (TL;DR)
 
