@@ -64,11 +64,9 @@
         "listen_port": 8080,
         "verbosity": "error",
         "enable_openapi": false,
-        "jwt_secret_key": "CAMBIAMI_con_una_stringa_casuale_lunga",
-        "ws_token": "CAMBIAMI_token_websocket",
         "CORS_origins": [],
         "username": "freqtrader",
-        "password": "CAMBIAMI_password_freqUI"
+        "password": "CAMBIA_QUESTA_PASSWORD"
     },
 
     "initial_state": "running",

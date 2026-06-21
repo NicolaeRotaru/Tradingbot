@@ -50,6 +50,10 @@ Guida completa (backtest, dry-run, passaggio al live con 50€):
   **solo su SOL**, Kraken Futures, long+short (`SolLongShortStrategy`), validato
   sui dati 1h reali: perché su SOL conviene il **solo long**, setup futures, PAC
   €500/mese e i compromessi onesti.
+- 🟢 **[Avvio in dry-run su Windows](docs/dry-run-windows.md)** — guida
+  passo-passo per far girare il bot SOL in **paper trading** sul tuo PC con
+  **Docker Desktop** + dashboard **FreqUI** (soldi simulati, nessun rischio).
+  Avvio: `docker compose -f docker-compose-sol.yml up -d`.
 - ⚖️ **[Realtà rendimenti e rischio](docs/realta-rendimenti-e-rischio.md)** — la
   lettura ONESTA: perché il "+10.000%" era **lookahead** (numero falso), la
   differenza in-sample vs **fuori campione**, il trade-off leva/drawdown e perché
