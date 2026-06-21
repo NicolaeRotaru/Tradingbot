@@ -66,7 +66,7 @@
         "enable_openapi": false,
         "CORS_origins": [],
         "username": "freqtrader",
-        "password": "CAMBIA_QUESTA_PASSWORD"
+        "password": "solbot123"
     },
 
     "initial_state": "running",
