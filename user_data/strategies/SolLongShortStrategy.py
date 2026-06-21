@@ -2,20 +2,21 @@
 """
 SolLongShortStrategy — strategia DEFINITIVA, focalizzata SOLO su SOL.
 
-Trend-following su SOL (timeframe 1h), capace di LONG e SHORT (futures).
-Leva 1x (nessuna amplificazione -> niente liquidazione). Size piena (sizing a
-% del saldo nel config, cosi' i tuoi versamenti di 500 EUR/mese aumentano da soli
-la dimensione delle operazioni).
+Trend-following su SOL (timeframe 1h), SOLO-LONG di default (lo short su SOL perde
+in ogni periodo testato). Uscita con CHANDELIER EXIT ad ATR (trailing su volatilita'),
+che e' il miglior compromesso rendimento/rischio trovato sui dati reali.
 
-⚠️  VERITA' DAI TUOI DATI (SOL 1h 2021-2026, anche fuori campione):
-    lo SHORT su SOL PEGGIORA i risultati. Solo-long: +2182% (DD -68%).
-    Long+short: peggio in OGNI periodo. SOL nel lungo periodo sale, quindi
-    shortare ti fa travolgere dai rialzi.
-    => Per il MASSIMO RENDIMENTO lascia `enable_shorts = False` (default).
-       Lo short e' disponibile (enable_shorts = True) perche' l'avevi chiesto,
-       con un filtro il piu' selettivo possibile, ma resta inferiore al solo-long.
-       Il modo migliore di "guadagnare quando SOL scende" e' stare in CONTANTI
-       durante i crolli: e' cio' che la strategia fa gia' uscendo dal long.
+⚠️  VERITA' DAI TUOI DATI (SOL 1h 2021-2026, in-sample E fuori campione):
+    - Solo-long batte long+short ovunque. => enable_shorts = False (default).
+    - L'obiettivo NON e' un rendimento mirabolante (quelli sono quasi sempre
+      LOOKAHEAD/overfitting), ma il miglior CALMAR ROBUSTO + sopravvivenza al
+      drawdown. Esempi reali (costi Kraken Futures inclusi, solo-long):
+          Baseline trailing 12% : +2182% / DD -68% / Calmar 1.15 (OOS 2024-26: +5%)
+          Chandelier 3xATR      : +1829% / DD -53% / Calmar 1.38 (OOS 2024-26: +11%)
+    - Il grosso del rendimento storico viene dal 2021-2023 (lancio di SOL). Fuori
+      campione la strategia rende molto meno: aspettative oneste, sempre dry-run.
+    - Drawdown-obiettivo ~-50%: la Chandelier 3xATR a leva 1x ci si avvicina (-53%).
+      Per scendere a -50% netto si puo' usare leverage_num = 0.9.
 
 Niente promesse di "vincere sempre": il win rate del trend-following e' ~28%
 (poche vincite grandi). Avvia SEMPRE in dry-run.
@@ -26,7 +27,7 @@ from pandas import DataFrame
 
 import talib.abstract as ta
 import freqtrade.vendor.qtpylib.indicators as qtpylib
-from freqtrade.strategy import IStrategy
+from freqtrade.strategy import IStrategy, stoploss_from_absolute
 
 
 class SolLongShortStrategy(IStrategy):
@@ -37,10 +38,10 @@ class SolLongShortStrategy(IStrategy):
     can_short = True
 
     # ===== INTERRUTTORE PRINCIPALE =====
-    # True  = long + short (TUA SCELTA esplicita e confermata).
-    # False = solo long: sui dati di SOL rende di piu' (+2182% vs +44%) con meno
-    #         drawdown. Se vuoi il MASSIMO RENDIMENTO, metti False.
-    enable_shorts = True
+    # False = solo long (DEFAULT): sui dati di SOL rende di piu' e con meno drawdown.
+    # True  = long + short: lo short su SOL PEGGIORA in ogni periodo (resta nel codice,
+    #         disattivato, per poterlo riattivare se lo si vuole testare).
+    enable_shorts = False
 
     process_only_new_candles = True
     use_exit_signal = True
@@ -49,12 +50,16 @@ class SolLongShortStrategy(IStrategy):
 
     # Take-profit disattivato: trend-following = lascia correre i profitti.
     minimal_roi = {"0": 10.0}
-    # Rete di sicurezza ampia; il lavoro lo fanno uscita di trend + trailing.
+
+    # Rete di sicurezza ampia; il lavoro lo fa la Chandelier (custom_stoploss).
     stoploss = -0.20
-    trailing_stop = True
-    trailing_stop_positive = 0.12
-    trailing_stop_positive_offset = 0.18
-    trailing_only_offset_is_reached = True
+
+    # USCITA = Chandelier Exit ad ATR (trailing su volatilita') via custom_stoploss.
+    # Sostituisce il trailing a % fisso: sui dati reali da' DD -53% (vs -68%) e il
+    # miglior Calmar (1.38). Niente trailing_stop fisso, niente conflitti.
+    use_custom_stoploss = True
+    trailing_stop = False
+    chandelier_mult = 3.0   # stop = max_rate - 3 * ATR  (3xATR e' il valore validato)
 
     order_types = {
         "entry": "limit",
@@ -63,7 +68,8 @@ class SolLongShortStrategy(IStrategy):
         "stoploss_on_exchange": False,
     }
 
-    # Leva 1x: nessuna amplificazione (leva > 1 = rischio di LIQUIDAZIONE).
+    # Leva 1x: a -50% di drawdown-obiettivo NON serve piu' leva (oltre ~1.5x peggiora,
+    # leverage decay). Per un -50% netto si puo' abbassare a 0.9.
     leverage_num = 1.0
 
     def leverage(self, pair: str, current_time: datetime, current_rate: float,
@@ -117,7 +123,7 @@ class SolLongShortStrategy(IStrategy):
         return dataframe
 
     def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
-        # Esci dal long quando il trend si rompe.
+        # Esci dal long quando il trend si rompe (la Chandelier ATR fa il trailing).
         dataframe.loc[
             (qtpylib.crossed_below(dataframe["close"], dataframe["ema200"]))
             & (dataframe["volume"] > 0),
@@ -131,3 +137,24 @@ class SolLongShortStrategy(IStrategy):
                 "exit_short",
             ] = 1
         return dataframe
+
+    def custom_stoploss(self, pair: str, trade, current_time: datetime,
+                        current_rate: float, current_profit: float, **kwargs) -> float | None:
+        """Chandelier Exit ad ATR: stop = (prezzo massimo dall'ingresso) - mult*ATR.
+
+        Sui long, `trade.max_rate` e' il massimo visto dall'ingresso (per gli short e'
+        `trade.min_rate` ma qui di default operiamo solo long). Restituendo None si
+        mantiene lo stoploss corrente (rete di sicurezza -20%).
+        """
+        df, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
+        if df is None or len(df) == 0:
+            return None
+        atr = df["atr"].iat[-1]
+        if atr is None or atr != atr or atr <= 0:   # NaN / non valido
+            return None
+        if trade.is_short:
+            stop_price = trade.min_rate + self.chandelier_mult * atr
+        else:
+            stop_price = trade.max_rate - self.chandelier_mult * atr
+        return stoploss_from_absolute(
+            stop_price, current_rate, is_short=trade.is_short, leverage=trade.leverage)

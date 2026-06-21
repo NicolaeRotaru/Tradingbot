@@ -2,7 +2,7 @@
     "$schema": "https://schema.freqtrade.io/schema.json",
     "bot_name": "sol-bot-krakenfutures",
 
-    "_commento": "Bot SOLO SOL su Kraken Futures (perpetuo SOL/USD:USD), long+short, leva 1x. DRY-RUN di default. Size piena: stake 'unlimited' su 1 sola operazione = quasi tutto il saldo per trade, e SCALA da solo quando versi i 500 EUR/mese. Per il LIVE: chiavi da futures.kraken.com (solo trading, NO prelievo) nel file .env, e dry_run:false. ATTENZIONE: i futures usano margine; con leva>1 rischi la LIQUIDAZIONE -> qui leva 1x.",
+    "_commento": "Bot SOLO SOL su Kraken Futures (perpetuo SOL/USD:USD), SOLO-LONG, uscita Chandelier 3xATR, leva 1x (drawdown-obiettivo ~-50%). DRY-RUN di default. Size piena: stake 'unlimited' su 1 sola operazione = quasi tutto il saldo per trade, e SCALA da solo quando versi i 500 EUR/mese. Aspettative ONESTE: niente +10000% (era lookahead); si massimizza il Calmar robusto fuori campione. Per il LIVE: chiavi da futures.kraken.com (solo trading, NO prelievo) nel file .env, e dry_run:false. ATTENZIONE: i futures usano margine; con leva>1 rischi la LIQUIDAZIONE -> qui leva 1x.",
 
     "max_open_trades": 1,
     "stake_currency": "USD",
