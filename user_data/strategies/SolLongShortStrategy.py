@@ -68,6 +68,25 @@ class SolLongShortStrategy(IStrategy):
         "stoploss_on_exchange": False,
     }
 
+    # Indicatori mostrati nella chart di FreqUI:
+    #  - sul grafico del prezzo: le tre EMA (trend)
+    #  - in pannelli separati sotto: ADX (forza del trend) e ATR (volatilita')
+    plot_config = {
+        "main_plot": {
+            "ema50": {"color": "orange"},
+            "ema200": {"color": "blue"},
+            "ema400": {"color": "purple"},
+        },
+        "subplots": {
+            "ADX (forza trend)": {
+                "adx": {"color": "red"},
+            },
+            "ATR (volatilita')": {
+                "atr": {"color": "grey"},
+            },
+        },
+    }
+
     # Leva 1x: a -50% di drawdown-obiettivo NON serve piu' leva (oltre ~1.5x peggiora,
     # leverage decay). Per un -50% netto si puo' abbassare a 0.9.
     leverage_num = 1.0
