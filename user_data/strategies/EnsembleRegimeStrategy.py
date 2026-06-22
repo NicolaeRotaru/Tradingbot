@@ -42,7 +42,7 @@ class EnsembleRegimeStrategy(IStrategy):
     chandelier_long = 5.0   # stop = max_rate - 5*ATR
     chandelier_short = 3.5  # stop = min_rate + 3.5*ATR (gli short rimbalzano: piu' stretto)
     # ===== modulo mean-reversion =====
-    mr_rsi_lo = 32.0
+    mr_rsi_lo = 42.0
     mr_rsi_hi = 68.0
     mr_exit_lo = 45.0
     mr_exit_hi = 55.0
@@ -124,11 +124,16 @@ class EnsembleRegimeStrategy(IStrategy):
         # TREND LONG: regime rialzista
         d.loc[(d["regime"] == 1) & (d["volume"] > 0), ["enter_long", "enter_tag"]] = (1, "trend_long")
 
-        # MEAN-REVERSION LONG: range + ipervenduto + sopra EMA200 (compra il ribasso in uptrend)
+        # MEAN-REVERSION LONG: compra il ribasso nelle fasi di range (le zone "cerchiate").
+        #   - regime == 0  -> non in trend forte (su trend giu' netto il regime e' -1 e qui NON entra)
+        #   - close < bb_mid -> meta' bassa del canale = "compra basso"
+        #   - rsi < 42 -> dip moderato (non serve l'ipervenduto estremo)
+        #   - close >= close[-1] -> la candela sta gia' rimbalzando (non comprare mentre cade)
+        #   NB: tolto il filtro close>ema200, che bloccava i dip sotto la linea blu.
         if self.enable_mr:
             d.loc[
-                (d["regime"] == 0) & (d["close"] < d["bb_low"]) & (d["rsi"] < self.mr_rsi_lo)
-                & (d["close"] > d["ema200"]) & (d["volume"] > 0),
+                (d["regime"] == 0) & (d["close"] < d["bb_mid"]) & (d["rsi"] < self.mr_rsi_lo)
+                & (d["close"] >= d["close"].shift(1)) & (d["volume"] > 0),
                 ["enter_long", "enter_tag"],
             ] = (1, "mr_long")
 
