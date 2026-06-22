@@ -94,3 +94,51 @@ lungo periodo ma con **MaxDD -65% invece di -97%** e Sharpe più alto → equity
    tipo di strategia (avg-win realistico ~1-2% sui timeframe operativi).
 4. Il bot dry-run resta utile come sandbox, ma la decisione informata su SOL è:
    *trend-following 4h per ridurre il drawdown, oppure semplicemente accumulare e tenere.*
+
+---
+
+## Appendice — "fare 10% a settimana con stop loss basso": verifica empirica
+
+> Richiesta: "trova un modo per fare 10% a settimana con stop loss basso".
+> Script: `scripts/test_10pct_weekly.py`. 10%/sett composto = 1,10^52 = **142× l'anno =
+> +14.100%/anno**. Testato sui dati reali, non a parole.
+
+**1) Rendimenti settimanali reali (leva 1×):**
+
+| | media | mediana | % settimane ≥10% | migliore | peggiore |
+|---|---:|---:|---:|---:|---:|
+| Buy & Hold | +1,85% | -0,60% | 23% | +59% | -60% |
+| Trend 4h EMA20/50 | +1,76% | 0,00% | 14% | +59% | -19% |
+
+La media settimanale realistica è **~+1,8%**, non +10%. Per centrare il target servirebbe
+che la *media* fosse +10% ogni settimana: 5,6× la realtà.
+
+**2) Leva — il rendimento sale ma arriva la liquidazione:**
+
+| Leva | CAGR | media sett. | MaxDD | liquidato? |
+|---:|---:|---:|---:|---|
+| 1× | +84% | +1,76% | -65% | no |
+| 2× | +94% | +3,58% | **-91%** | no |
+| 3× | -100% | -3,50% | -85% | 💀 azzerato |
+| 5× | -100% | -14,76% | -99% | 💀 azzerato |
+| 10× | -100% | -100% | — | 💀 azzerato |
+
+Nota: già a 2× il CAGR sale appena (+84%→+94%) ma il MaxDD esplode a -91% (tassa di
+volatilità). Da 3× in su le gambe larghe di SOL (barre 4h da -15%/-25%, frequenti)
+**liquidano il conto**. "Stop loss basso" = poco margine = liquidazione *garantita* a leva.
+
+**3) È mai successo storicamente?** Su 279 settimane, solo 39 (14%) hanno fatto ≥10%, e la
+**striscia massima consecutiva è 7 settimane**. Per il target ne servirebbero 52 di fila.
+
+**4) La matematica dello "stop basso":** per +10%/sett con stop al 2% servirebbe un win rate
+> 75% a R:R 1:1 — non esiste su SOL. A R:R 3:1 servirebbe colpire +6% in un giorno
+ripetutamente: il backtest reale dà expectancy **negativa**.
+
+### Verdetto
+
+> **10% a settimana sostenuto NON è realizzabile sui dati reali di SOL.** A leva 1× la
+> realtà è ~+1,8%/sett; con la leva il numero teorico sale ma "stop basso + leva" =
+> liquidazione nei crash (che su SOL arrivano spesso). Non è mai esistita una striscia
+> lunga di settimane ≥10%. **Chiunque prometta 10%/sett con stop basso vende fumo** — o,
+> peggio, ti mette a leva e ti liquida. L'obiettivo realistico resta: trend-following 4h
+> long-only per un rendimento ≈ Buy & Hold con drawdown molto più basso.
