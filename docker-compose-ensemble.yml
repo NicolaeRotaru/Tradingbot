@@ -1,0 +1,30 @@
+# Bot POTENZIATO a commutazione di regime (EnsembleRegimeStrategy) — DRY-RUN.
+#
+# AVVIO:   docker compose -f docker-compose-ensemble.yml up -d
+# LOG:     docker compose -f docker-compose-ensemble.yml logs -f
+# STOP:    docker compose -f docker-compose-ensemble.yml down
+# UPDATE:  git pull  &&  docker compose -f docker-compose-ensemble.yml up -d
+#
+# Dashboard: http://127.0.0.1:8080  (utente: freqtrader / password: solbot123)
+#
+# IMPORTANTE: usa la porta 8080 come il bot SOL. NON avviarli insieme: prima
+# ferma l'altro  ->  docker compose -f docker-compose-sol.yml down
+#
+# Soldi SIMULATI (dry_run: true, portafoglio 500). Nessuna chiave API, nessun rischio reale.
+# Strategia validata walk-forward out-of-sample (vedi docs/potenziamento-risultati.md).
+
+services:
+  freqtrade-ensemble:
+    image: freqtradeorg/freqtrade:stable
+    container_name: tradingbot-ensemble
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - "./user_data:/freqtrade/user_data"
+    command: >
+      trade
+      --logfile /freqtrade/user_data/logs/ensemble.log
+      --db-url sqlite:////freqtrade/user_data/tradesv3-ensemble.sqlite
+      --config /freqtrade/user_data/config-ensemble.json
+      --strategy EnsembleRegimeStrategy
