@@ -50,7 +50,7 @@ class EnsembleRegimeStrategy(IStrategy):
 
     process_only_new_candles = True
     use_exit_signal = True
-    exit_profit_only = False
+    exit_profit_only = True   # non uscire in perdita per segnale: aspetta ROI 1% o stop
     startup_candle_count = 700   # EMA400 + buffer protections su 15m
 
     minimal_roi = {"0": 0.01}     # chiudi a +1% di profitto su qualsiasi trade
