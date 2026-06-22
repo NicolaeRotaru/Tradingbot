@@ -2,20 +2,22 @@
 """
 EnsembleRegimeStrategy — bot a commutazione di regime, 15m, SOL/USD:USD.
 
-  USCITA — sistema a DUE LINEE, IDENTICO per OGNI trade long:
-    TAKE-PROFIT : il prezzo tocca la linea VERDE (bb_up) con almeno +0.3% → chiude in GUADAGNO
-    STOP-LOSS   : il prezzo scende alla linea ROSSA (close - 3×ATR)       → chiude in PERDITA
+  USCITA — ADATTIVA in base al regime:
+    BULL (+1) TRAILING  : il bot sale con le candele. La linea VERDE è sotto il prezzo
+                          e sale con esso. Esce solo quando il prezzo scende 1×ATR dal max
+                          del trade (profit ≥1%). Così cattura tutto il trend bull.
+    RANGE (0)  FISSO    : esce a bb_up (banda superiore di Bollinger) con profit ≥0.3%.
+    BEAR (-1)  SEGNALE  : esce su segnale regime (populate_exit_trend).
 
-  INGRESSO — "V-BOUNCE": compra la PRIMA candela verde dopo un dip. Due strade:
-    A) DIP & RIMBALZO  : c'è stato un dip negli ultimi 3 (minimo sul fondo o RSI
-                         ipervenduto) e ORA gira su → prende anche le V veloci.
-    B) PULLBACK in UP  : in uptrend confermato, storno leggero (RSI<50) che rimbalza.
-    In un trend senza storni NON entra (niente muro di ingressi): uno per ogni ribasso.
+  INGRESSO — "V-BOUNCE" + filtro direzionale (+DI/-DI):
+    A) DIP & RIMBALZO : dip recente (RSI<40 o low<bb_low) + prima candela verde +
+                        +DI > -DI (i compratori tornano) + bb_mid stabile
+    B) PULLBACK UP    : in regime +1, storno leggero (RSI<50) che rimbalza
 
   Sul grafico:
-    VERDE  bb_up         = linea di TAKE-PROFIT (dove chiude in PROFITTO)
-    ROSSO  chan_stop     = linea di STOP-LOSS   (dove chiude in PERDITA)
-    Grigio bb_low/bb_mid = zona di ingresso del dip
+    VERDE trailing TP : in BULL sale con le candele (esce quando scende a toccarla)
+    VERDE bb_up       : in RANGE target fisso sopra il prezzo
+    ROSSO stop_loss   : Chandelier 3×ATR sotto il prezzo (sale col trade)
 """
 from datetime import datetime
 
@@ -104,6 +106,13 @@ class EnsembleRegimeStrategy(IStrategy):
         d["atr"]    = ta.ATR(d, timeperiod=14)
         d["adx"]    = ta.ADX(d, timeperiod=14)
 
+        # +DI / -DI — l'altra metà dell'ADX che non usavamo.
+        # ADX = forza del trend. +DI = forza dei compratori. -DI = forza dei venditori.
+        # Quando -DI > +DI: i venditori dominano → siamo in un bear anche se ADX è basso.
+        # I trader professionisti usano sempre ADX + DI insieme (mai ADX da solo).
+        d["plus_di"]  = ta.PLUS_DI(d, timeperiod=14)
+        d["minus_di"] = ta.MINUS_DI(d, timeperiod=14)
+
         # Bollinger 20,2
         mid = d["close"].rolling(20).mean()
         std = d["close"].rolling(20).std(ddof=0)
@@ -125,9 +134,13 @@ class EnsembleRegimeStrategy(IStrategy):
         d.loc[is_trend & (d["ema50"] > d["ema200"]) & (d["close"] > d["ema200"]), "regime"] =  1
         d.loc[is_trend & (d["ema50"] < d["ema200"]) & (d["close"] < d["ema200"]), "regime"] = -1
 
-        # ===== LE UNICHE DUE LINEE MOSTRATE SUL GRAFICO =====
-        d["take_profit"] = d["bb_up"]                                    # VERDE: dove il bot chiude in PROFITTO
-        d["stop_loss"]   = d["close"] - self.chandelier_long * d["atr"]  # ROSSO: sempre sotto il prezzo attuale
+        # ===== LE DUE LINEE SUL GRAFICO =====
+        # VERDE in BULL: trailing TP — sale con le candele, il bot esce quando scende a toccarla.
+        #   = max(high, ultimi 5) - 1×ATR: una linea sotto i massimi recenti che segue il prezzo.
+        # VERDE in RANGE: target fisso a bb_up (banda superiore di Bollinger).
+        trailing_tp = d["high"].rolling(5).max() - 1.0 * d["atr"]
+        d["take_profit"] = np.where(d["regime"] == 1, trailing_tp, d["bb_up"])
+        d["stop_loss"]   = d["close"] - self.chandelier_long * d["atr"]  # ROSSO: sempre sotto il prezzo
         return dataframe
 
     # ---------------- INGRESSI ----------------
@@ -159,12 +172,19 @@ class EnsembleRegimeStrategy(IStrategy):
         # discesa la fa scendere di oltre 0.5% (blocca). Soglia da tarare col backtest.
         bb_not_falling = d["bb_mid"] >= d["bb_mid"].shift(5) * 0.995
 
+        # I compratori devono dominare i venditori (+DI > -DI).
+        # Questo è il filtro chiave che i grandi trader usano sempre con ADX:
+        # blocca le entrate quando i venditori controllano ancora il mercato,
+        # anche se ADX non è ancora alto e regime non ha dichiarato -1.
+        buyers_win = d["plus_di"] > d["minus_di"]
+
         # STRADA A — DIP & RIMBALZO (range o V netta). Prima singola candela verde.
         dip_bounce = (
             (d["regime"] != -1)
             & just_had_dip
             & enough_room
             & bb_not_falling
+            & buyers_win
             & turning_up
         )
 
@@ -203,19 +223,32 @@ class EnsembleRegimeStrategy(IStrategy):
             d.loc[(d["regime"] == 1) & (d["volume"] > 0), "exit_short"] = 1
         return dataframe
 
-    # ---------------- TAKE-PROFIT: linea VERDE (bb_up) per OGNI trade long ----------------
+    # ---------------- TAKE-PROFIT ADATTIVO ----------------
     def custom_exit(self, pair, trade, current_time, current_rate, current_profit, **kwargs):
-        # Chiude in PROFITTO quando il prezzo raggiunge la linea VERDE (bb_up).
-        # Soglia minima 0.3%: copre le fees senza bloccare uscite valide.
         if current_profit < 0.003:
             return None
         df, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
         if df is None or len(df) == 0:
             return None
         last = df.iloc[-1]
+        atr = last["atr"] if last["atr"] == last["atr"] and last["atr"] > 0 else None
+
         if not trade.is_short:
-            if current_rate >= last["bb_up"] or last["rsi"] > self.mr_rsi_hi:
-                return "take_profit"      # ← punto di uscita VERDE (profitto)
+            if last["regime"] == 1 and atr:
+                # BULL — trailing TP: la linea verde sale con le candele.
+                # Esce quando il prezzo scende 1×ATR sotto il massimo del trade.
+                # Minimo +1% per non uscire sul normale rumore di mercato.
+                if current_profit >= 0.010:
+                    trail_level = trade.max_rate - atr
+                    if current_rate <= trail_level:
+                        return "trail_bull"
+                # RSI estremo anche in bull: compratori esauriti
+                if last["rsi"] > 78:
+                    return "take_profit"
+            else:
+                # RANGE / BEAR — target fisso a bb_up (mean reversion classica)
+                if current_rate >= last["bb_up"] or last["rsi"] > self.mr_rsi_hi:
+                    return "take_profit"
         else:
             if current_rate <= last["bb_low"] or last["rsi"] < self.mr_rsi_lo_exit:
                 return "take_profit"
