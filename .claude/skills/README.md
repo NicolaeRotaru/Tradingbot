@@ -5,6 +5,7 @@ In una sessione Claude Code su questo repo, scrivi `/<nome>` (es. `/stato`).
 
 | Skill | A cosa serve | Dove gira |
 |---|---|---|
+| `/esperto-di-trading-bot` | Consulente esperto del progetto: consigli, spiegazioni, "quale strategia conviene", "è sicuro andare live" | risponde nell'ambiente Claude |
 | `/stato` | Come va il bot (Up/Restarting, log, errori) | genera comandi per il VPS |
 | `/deploy` | Installa o aggiorna il bot sul VPS (dry-run) | genera comandi per il VPS |
 | `/cambia-strategia` | Passa TREND ⇄ ENSEMBLE (compra basso/vende alto) | genera comandi per il VPS |
