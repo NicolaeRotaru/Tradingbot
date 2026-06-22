@@ -3,9 +3,9 @@
 EnsembleRegimeStrategy — bot a commutazione di regime, 15m, SOL/USD:USD.
 
   USCITA — ADATTIVA per regime:
-    BULL (+1)  TRAILING  : linea VERDE trailing sotto i massimi (max_high − 2.5×ATR).
-                           Esce solo quando il prezzo ritraccia 2.5×ATR dal max (profit ≥1%).
-                           Lascia correre tutto il trend bull senza uscire sul rumore.
+    BULL (+1)  TRAILING  : linea VERDE che RATCHETTA — highest_high(22) − 2.5×ATR, sale
+                           coi massimi e NON scende mai nel pump. Esce quando il prezzo
+                           scende a toccarla (profit ≥1%). Cavalca tutto il trend bull.
     RANGE >EMA50 (0)    : linea VERDE a bb_up (mean reversion piena).
     RANGE <EMA50 (0)    : linea VERDE a bb_mid (rimbalzi più corti → target compresso).
     BEAR (-1)  SEGNALE  : esce su segnale regime; nessun nuovo ingresso in bear.
@@ -149,13 +149,18 @@ class EnsembleRegimeStrategy(IStrategy):
         d["atr_veto"] = atr_pct > atr_pct.rolling(200, min_periods=100).quantile(0.80)
 
         # ===== LINEA VERDE — adattiva per regime =====
-        # BULL         : trailing tight (max_high×3 − 1×ATR). Sale con ogni candela alta
-        #                → la linea "tocca" i massimi salendo con il prezzo in bull.
+        # BULL : trailing tipo Chandelier che RATCHETTA — highest_high(22) − bull_trail_atr×ATR,
+        #        poi cummax dentro ogni tratto consecutivo di bull. La verde SALE coi massimi
+        #        e NON scende mai durante il pump (prima crollava: usava max(high,3)−×ATR e
+        #        quando l'ATR esplodeva la riga si abbassava). Riparte solo a fine bull.
         # RANGE >EMA50 : bb_up (target pieno: mean reversion classica).
         # RANGE <EMA50 : bb_mid (rimbalzi più corti in contesto ribassista → target compresso).
-        trail_bull = d["high"].rolling(3).max() - self.bull_trail_atr * d["atr"]
+        chand      = d["high"].rolling(22).max() - self.bull_trail_atr * d["atr"]
+        is_bull    = d["regime"] == 1
+        bull_grp   = (is_bull != is_bull.shift()).cumsum()     # id di ogni tratto consecutivo
+        trail_bull = chand.groupby(bull_grp).cummax()          # ratchet: solo verso l'alto nel bull
         range_tp   = np.where(d["close"] > d["ema50"], d["bb_up"], d["bb_mid"])
-        d["take_profit"] = np.where(d["regime"] == 1, trail_bull, range_tp)
+        d["take_profit"] = np.where(is_bull, trail_bull, range_tp)
         d["stop_loss"]   = d["close"] - self.chandelier_long * d["atr"]
         return dataframe
 
@@ -251,18 +256,15 @@ class EnsembleRegimeStrategy(IStrategy):
         if df is None or len(df) == 0:
             return None
         last = df.iloc[-1]
-        atr = last["atr"] if last["atr"] == last["atr"] and last["atr"] > 0 else None
 
         if not trade.is_short:
-            if last["regime"] == 1 and atr:
-                # BULL — lascia correre il trend. La linea verde (trailing) sale con i
-                # massimi; si esce SOLO quando il prezzo ritraccia bull_trail_atr×ATR dal
-                # massimo del trade, dopo almeno +1%. Niente cap RSI: in un bull forte
-                # l'RSI resta >78 a lungo e uscire lì tronca proprio la corsa da cavalcare.
-                if current_profit >= 0.010:
-                    trail_level = trade.max_rate - self.bull_trail_atr * atr
-                    if current_rate <= trail_level:
-                        return "trail_bull"
+            if last["regime"] == 1:
+                # BULL — esce quando il prezzo scende a TOCCARE la verde (trailing che
+                # ratchetta in populate_indicators: sale coi massimi, non scende mai nel
+                # bull). Così cattura tutto il pump ed esce solo sul ritracciamento vero,
+                # dopo almeno +1%. Niente cap RSI: in un bull forte l'RSI resta >78 a lungo.
+                if current_profit >= 0.010 and current_rate <= last["take_profit"]:
+                    return "trail_bull"
             else:
                 # RANGE / BEAR — target adattivo (pre-calcolato in populate_indicators):
                 #   close > EMA50 → bb_up (rimbalzo pieno)
