@@ -28,6 +28,12 @@ Guida completa (backtest, dry-run, passaggio al live con 50€):
   anti-overfitting (filtro di trend EMA200 + entrata su pullback RSI). Variante
   **long + short** (buy *e* sell) in `StarterStrategyLS.py` + `config-futures.json`
   ⚠️ futures/leva, più rischiosa — vedi doc dedicato.
+- **Potenziamento (nuovo):** `user_data/strategies/EnsembleRegimeStrategy.py` —
+  bot a **commutazione di regime**: trend-long quando sale, trend-short quando
+  scende, mean-reversion (compra basso / vende alto) quando è laterale, con
+  vol-targeting + drawdown-throttle + filtro ML. Validato walk-forward
+  out-of-sample su SOL/BTC/ETH 1h — risultati con grafici reali in
+  **[docs/potenziamento-risultati.md](docs/potenziamento-risultati.md)**.
 - **Rischio:** stoploss + trailing + ROI + `protections` (MaxDrawdown,
   StoplossGuard, CooldownPeriod) come circuit breaker
 - **Sicurezza:** dry-run di default, chiavi API solo per il live (trade-only, no
@@ -35,6 +41,12 @@ Guida completa (backtest, dry-run, passaggio al live con 50€):
 
 ## Documentazione
 
+- ⭐ **[Potenziamento — risultati su dati reali](docs/potenziamento-risultati.md)**
+  — il bot **a commutazione di regime** (sale/scende/laterale) con vol-targeting,
+  drawdown-throttle, Kelly e filtro ML, validato **walk-forward out-of-sample**.
+  Grafici reali: su SOL fa **+42% OOS mentre buy&hold fa −80%**, con drawdown
+  3–4× più piccolo. Lettura onesta inclusa (su BTC in bull, tenere ha reso di
+  più). Motore di ricerca in `research/`.
 - 🛠️ **[Guida operativa](docs/setup-freqtrade.md)** — setup, backtest, paper
   trading e checklist per il passaggio al live.
 - 📈 **[Backtest su Solana](docs/backtest-solana.md)** — backtest reale della
