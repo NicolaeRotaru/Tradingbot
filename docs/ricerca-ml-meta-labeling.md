@@ -234,3 +234,51 @@ E anche modificando TP/SL, l'expectancy per trade rimane costantemente ~-0,27%.
 
 > Il bot live (dry-run) può continuare come sandbox, ma non aspettarsi alpha positivo
 > basandosi su questi risultati di ricerca. L'evidenza non supporta il trading live con size reale.
+
+---
+
+# Ricerca V3 — e se aggiungessi lo SHORT? (RISULTATO DEFINITIVO)
+
+> Domanda: "e se gli aggiungessi lo short?". Test empirico, non teoria.
+> Script: `scripts/test_short_side.py`. Lo short è lo **specchio esatto** del V-bounce:
+> invece di comprare i dip in regime non-bear, shorta i "rip" (picchi RSI>60 / sopra
+> banda alta) in regime non-bull che girano giù. Stessa triple-barrier (TP=SL=2×ATR),
+> stesso split fisso 2024-01-01, stessi 5+ anni di dati.
+
+## Risultati misurati
+
+| Direzione | Periodo | N | WR | avg_win | avg_loss | PF | Expectancy |
+|---|---|---:|---:|---:|---:|---:|---:|
+| LONG | IS 2021-23 | 2296 | 47,9% | +1,87% | -2,12% | 0,81 | -0,211% ❌ |
+| LONG | OOS 2024+ | 1972 | 45,9% | +0,97% | -1,41% | 0,59 | -0,314% ❌ |
+| **SHORT** | IS 2021-23 | 2169 | 47,3% | +1,66% | -2,06% | 0,72 | **-0,301%** ❌ |
+| **SHORT** | OOS 2024+ | 2154 | 49,3% | +1,06% | -1,52% | 0,68 | **-0,249%** ❌ |
+
+### Short per anno (robustezza)
+
+| Anno | N | WR | Expectancy |
+|---|---:|---:|---:|
+| 2021 | 564 | 44,5% | -0,596% ❌ |
+| 2022 (bear) | 1047 | 47,9% | -0,175% ❌ |
+| 2023 | 558 | 48,9% | -0,239% ❌ |
+| 2024 | 787 | 47,4% | -0,276% ❌ |
+| 2025 | 970 | 50,1% | -0,224% ❌ |
+| 2026 | 397 | 50,9% | -0,255% ❌ |
+
+Anche il **2022** (bear market conclamato, -55% SOL) — dove lo short *dovrebbe* brillare —
+dà expectancy negativa. L'unica cella positiva è "short bear OOS" (n=69, +0,056%) ma il
+suo gemello in-sample è -0,412%: positivo OOS + negativo IS = **rumore, non edge**
+(esattamente il caso che lo script avverte di non confondere con un segnale).
+
+## Verdetto: **lo short NON aiuta. Il problema non è la direzione.**
+
+> **Long e short hanno la STESSA expectancy negativa (~-0,25%/trade) su SOL 15m.**
+> La simmetria del risultato dimostra che il problema è strutturale dell'asset/timeframe
+> (mean-reversion su SOL 15m), non della direzione di trading. Aggiungere lo short
+> raddoppierebbe i trade ma anche le perdite — non crea alpha, lo specchia.
+
+### Sul target "+10%/trade"
+Irrealistico per questa strategia. Su SOL 15m la mossa media catturabile è ~0,8–1,5%/trade
+(avg_win misurato). +10%/trade richiede holding di giorni su mosse del 10-20% — è
+swing/position trading su timeframe 4h/1d, una strategia completamente diversa, non un
+tuning del V-bounce. Nessun parametro trasforma +1% in +10% per trade.
