@@ -36,8 +36,8 @@ class EnsembleRegimeStrategy(IStrategy):
     enable_mr = True        # mean-reversion nelle fasi laterali (compra basso / vende alto)
 
     # ===== parametri regime =====
-    adx_trend = 22.0
-    er_trend = 0.30
+    adx_trend = 15.0
+    er_trend = 0.20
     # ===== modulo trend =====
     chandelier_long = 5.0   # stop = max_rate - 5*ATR
     chandelier_short = 3.5  # stop = min_rate + 3.5*ATR (gli short rimbalzano: piu' stretto)
