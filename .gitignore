@@ -28,3 +28,6 @@ venv/
 *.swp
 .idea/
 .vscode/
+
+# Research artifacts rigenerabili (npz cache dei backtest)
+results/research/*.npz
