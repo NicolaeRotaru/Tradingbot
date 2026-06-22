@@ -78,11 +78,12 @@ def main() -> int:
         print(f"  -> salvato {path.relative_to(ROOT)}  ({len(df)} candele, "
               f"{df['date'].min().date()} -> {df['date'].max().date()})")
 
-    print("\nFatto. Ora committa e pusha questi CSV:")
-    print("  git add user_data/data_sources/*-1h.csv")
-    print('  git commit -m "Aggiungi storico 1h per il backtest"')
+    tf = args.timeframe
+    print(f"\nFatto. Ora committa e pusha questi CSV ({tf}):")
+    print(f"  git add user_data/data_sources/*-{tf}.csv")
+    print(f'  git commit -m "Aggiungi storico {tf} per il backtest"')
     print("  git push")
-    print("Poi chiedi all'assistente di eseguire il backtest a 1h su questi dati.")
+    print(f"Poi chiedi all'assistente di eseguire il backtest a {tf} su questi dati.")
     return 0
 
 
