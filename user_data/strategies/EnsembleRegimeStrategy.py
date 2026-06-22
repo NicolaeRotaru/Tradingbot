@@ -28,7 +28,7 @@ from freqtrade.strategy import IStrategy, stoploss_from_absolute
 class EnsembleRegimeStrategy(IStrategy):
 
     INTERFACE_VERSION = 3
-    timeframe = "1h"
+    timeframe = "15m"
     can_short = True
 
     # ===== INTERRUTTORI =====
@@ -36,8 +36,8 @@ class EnsembleRegimeStrategy(IStrategy):
     enable_mr = True        # mean-reversion nelle fasi laterali (compra basso / vende alto)
 
     # ===== parametri regime =====
-    adx_trend = 22.0
-    er_trend = 0.30
+    adx_trend = 15.0
+    er_trend = 0.20
     # ===== modulo trend =====
     chandelier_long = 5.0   # stop = max_rate - 5*ATR
     chandelier_short = 3.5  # stop = min_rate + 3.5*ATR (gli short rimbalzano: piu' stretto)
@@ -46,15 +46,15 @@ class EnsembleRegimeStrategy(IStrategy):
     mr_rsi_hi = 68.0
     mr_exit_lo = 45.0
     mr_exit_hi = 55.0
-    mr_stop = 0.06          # hard stop dei trade mean-reversion
+    mr_stop = 0.02          # hard stop dei trade mean-reversion (2% su 15m: 1:1 R:R col target)
 
     process_only_new_candles = True
     use_exit_signal = True
-    exit_profit_only = False
-    startup_candle_count = 400
+    exit_profit_only = True   # non uscire in perdita per segnale: aspetta ROI 1% o stop
+    startup_candle_count = 700   # EMA400 + buffer protections su 15m
 
-    minimal_roi = {"0": 10.0}     # take-profit disattivato: lascia correre i trend
-    stoploss = -0.20              # rete di sicurezza; il lavoro lo fanno Chandelier/MR-stop
+    minimal_roi = {"0": 0.01}     # chiudi a +1% di profitto su qualsiasi trade
+    stoploss = -0.05              # rete di sicurezza: max -5% se tutto il resto fallisce
     use_custom_stoploss = True
     trailing_stop = False
 
@@ -83,12 +83,13 @@ class EnsembleRegimeStrategy(IStrategy):
 
     @property
     def protections(self):
+        # periodi scalati per 15m: 1h*4 = 4 candele da 15m per ogni ora
         return [
-            {"method": "CooldownPeriod", "stop_duration_candles": 3},
-            {"method": "MaxDrawdown", "lookback_period_candles": 168,
-             "trade_limit": 6, "stop_duration_candles": 72, "max_allowed_drawdown": 0.25},
-            {"method": "StoplossGuard", "lookback_period_candles": 48,
-             "trade_limit": 3, "stop_duration_candles": 24, "only_per_pair": False},
+            {"method": "CooldownPeriod", "stop_duration_candles": 12},   # 3h
+            {"method": "MaxDrawdown", "lookback_period_candles": 672,
+             "trade_limit": 6, "stop_duration_candles": 288, "max_allowed_drawdown": 0.25},
+            {"method": "StoplossGuard", "lookback_period_candles": 192,
+             "trade_limit": 3, "stop_duration_candles": 96, "only_per_pair": False},
         ]
 
     # ---------------- INDICATORI ----------------
@@ -106,9 +107,9 @@ class EnsembleRegimeStrategy(IStrategy):
         d["bb_mid"] = mid
         d["bb_low"] = mid - 2.0 * std
         d["bb_up"] = mid + 2.0 * std
-        # Efficiency Ratio (Kaufman) su 24 barre: "trendiness" 0..1
-        change = (d["close"] - d["close"].shift(24)).abs()
-        vol = d["close"].diff().abs().rolling(24).sum()
+        # Efficiency Ratio (Kaufman) su 96 barre (= 24h su 15m): "trendiness" 0..1
+        change = (d["close"] - d["close"].shift(96)).abs()
+        vol = d["close"].diff().abs().rolling(96).sum()
         d["er"] = (change / vol.replace(0.0, np.nan)).fillna(0.0)
         # Regime: +1 trend-up, -1 trend-down, 0 range
         is_trend = (d["adx"] > self.adx_trend) & (d["er"] > self.er_trend)
