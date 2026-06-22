@@ -2,20 +2,18 @@
 """
 EnsembleRegimeStrategy — bot a commutazione di regime, 15m, SOL/USD:USD.
 
-  REGIME  0  (laterale): MEAN-REVERSION
-    Ingresso : close < bb_mid  +  RSI < 42  +  candela verde  +  RSI in recupero
-    Uscita TP: prezzo raggiunge bb_up (linea VERDE)  O  RSI > 65  [i cerchi!]
-    Stop     : −2% dall'ingresso (linea ROSSA tratteggiata)
+  USCITA — sistema a DUE LINEE, IDENTICO per OGNI trade long:
+    TAKE-PROFIT : il prezzo tocca la linea VERDE (bb_up) con almeno +1% → chiude in GUADAGNO
+    STOP-LOSS   : il prezzo scende alla linea ROSSA (Chandelier 3×ATR)   → chiude in PERDITA
 
-  REGIME +1  (trend su): TREND-LONG
-    Ingresso : regime == 1
-    Uscita   : Chandelier trailing stop (linea ROSSA continua sul grafico)
-    Stop rif.: max_close − 5×ATR
+  INGRESSO — UNICO, "compra il dip che rimbalza" (tranne nei downtrend forti):
+    regime != -1  +  close<bb_mid  +  RSI<42  +  candela verde  +  RSI in recupero
+    In un trend senza storni NON entra (niente muro di ingressi): uno per ogni ribasso.
 
   Sul grafico:
-    VERDE  bb_up        = dove il bot chiude in profitto i trade MR (take-profit)
-    ROSSO  chan_stop     = dove scatta lo stop dei trade di trend (Chandelier)
-    Grigio bb_low/bb_mid = zona di ingresso MR
+    VERDE  bb_up         = linea di TAKE-PROFIT (dove chiude in PROFITTO)
+    ROSSO  chan_stop     = linea di STOP-LOSS   (dove chiude in PERDITA)
+    Grigio bb_low/bb_mid = zona di ingresso del dip
 """
 from datetime import datetime
 
@@ -33,22 +31,20 @@ class EnsembleRegimeStrategy(IStrategy):
     can_short = True
 
     # ===== INTERRUTTORI =====
-    enable_shorts = False
-    enable_mr = True
+    enable_shorts = False    # short disattivati: su SOL peggiorano (vedi ricerca)
 
     # ===== parametri regime =====
     adx_trend = 15.0
     er_trend = 0.20
 
-    # ===== modulo trend =====
-    chandelier_long = 5.0    # stop = max_close - 5*ATR  (linea rossa sul grafico)
-    chandelier_short = 3.5
+    # ===== stop-loss (linea ROSSA, uguale per tutti i trade) =====
+    chandelier_long = 3.0    # stop = max_close - 3*ATR (linea rossa). Stretto = rischio ~1-2% per scalp 1%
+    chandelier_short = 3.0
 
-    # ===== modulo mean-reversion =====
+    # ===== soglie RSI =====
     mr_rsi_lo = 42.0         # RSI sotto questa soglia = dip → ingresso
-    mr_rsi_hi = 65.0         # RSI sopra questa soglia = overbought → TP (i cerchi)
-    mr_rsi_lo_exit = 35.0    # RSI per uscita short MR
-    mr_stop = 0.02           # stop MR: −2%
+    mr_rsi_hi = 65.0         # RSI sopra questa soglia = overbought → take-profit (i cerchi)
+    mr_rsi_lo_exit = 35.0    # RSI per uscita short
 
     process_only_new_candles = True
     use_exit_signal = True
@@ -140,37 +136,34 @@ class EnsembleRegimeStrategy(IStrategy):
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         d = dataframe
 
-        # TREND LONG: regime rialzista
-        d.loc[(d["regime"] == 1) & (d["volume"] > 0), ["enter_long", "enter_tag"]] = (1, "trend_long")
-
-        # MEAN-REVERSION LONG: compra il dip quando il mercato è laterale (regime 0).
-        #   regime == 0   → non in trend forte (nè su nè giù)
+        # INGRESSO UNICO — "compra il DIP che rimbalza", tranne nei downtrend forti.
+        # Elimina il muro di triangoli: in un trend SENZA storni NON entra (RSI resta alto),
+        # entra solo quando il prezzo storna e poi rimbalza = UN ingresso per ogni ribasso.
+        #   regime != -1   → non in trend giù confermato (lì si sta fuori dal mercato)
         #   close < bb_mid → metà bassa del canale = "compra basso"
-        #   rsi < 42       → dip moderato (non serve ipervenduto estremo)
+        #   rsi < 42       → c'è stato un dip (in trend forte senza pullback aspetta)
         #   close > open   → candela verde = rimbalzo già iniziato, non coltello che cade
         #   rsi > rsi[-2]  → RSI sta risalendo dal minimo (conferma della svolta)
-        if self.enable_mr:
-            d.loc[
-                (d["regime"] == 0)
-                & (d["close"] < d["bb_mid"])
-                & (d["rsi"] < self.mr_rsi_lo)
-                & (d["close"] > d["open"])
-                & (d["rsi"] > d["rsi"].shift(2))
-                & (d["volume"] > 0),
-                ["enter_long", "enter_tag"],
-            ] = (1, "mr_long")
+        long_dip = (
+            (d["regime"] != -1)
+            & (d["close"] < d["bb_mid"])
+            & (d["rsi"] < self.mr_rsi_lo)
+            & (d["close"] > d["open"])
+            & (d["rsi"] > d["rsi"].shift(2))
+            & (d["volume"] > 0)
+        )
+        d.loc[long_dip, ["enter_long", "enter_tag"]] = (1, "dip_long")
 
         if self.enable_shorts:
-            d.loc[
-                (d["regime"] == -1) & (d["close"] < d["ema400"]) & (d["volume"] > 0),
-                ["enter_short", "enter_tag"],
-            ] = (1, "trend_short")
-            if self.enable_mr:
-                d.loc[
-                    (d["regime"] == 0) & (d["close"] > d["bb_up"]) & (d["rsi"] > self.mr_rsi_hi)
-                    & (d["close"] < d["ema200"]) & (d["volume"] > 0),
-                    ["enter_short", "enter_tag"],
-                ] = (1, "mr_short")
+            short_pop = (
+                (d["regime"] != 1)
+                & (d["close"] > d["bb_mid"])
+                & (d["rsi"] > self.mr_rsi_hi)
+                & (d["close"] < d["open"])
+                & (d["rsi"] < d["rsi"].shift(2))
+                & (d["volume"] > 0)
+            )
+            d.loc[short_pop, ["enter_short", "enter_tag"]] = (1, "dip_short")
         return dataframe
 
     # ---------------- USCITE A SEGNALE ----------------
@@ -184,39 +177,31 @@ class EnsembleRegimeStrategy(IStrategy):
             d.loc[(d["regime"] == 1) & (d["volume"] > 0), "exit_short"] = 1
         return dataframe
 
-    # ---------------- TAKE-PROFIT MR (i cerchi!) ----------------
+    # ---------------- TAKE-PROFIT: linea VERDE (bb_up) per OGNI trade long ----------------
     def custom_exit(self, pair, trade, current_time, current_rate, current_profit, **kwargs):
-        if not str(trade.enter_tag or "").startswith("mr"):
-            return None  # i trade di trend vengono gestiti da Chandelier
-
-        # non uscire finché non siamo almeno a +1%: il target è bb_up, non un micro-gain
+        # Chiude in PROFITTO quando il prezzo raggiunge la linea VERDE (bb_up),
+        # ma solo se il guadagno è almeno +1% (niente micro-uscite flat).
+        # IMPORTANTE: vale per TUTTI i long (trend E mean-reversion) — prima i trend
+        # NON usavano questa uscita e restavano aperti (= "entry senza puntino giallo").
         if current_profit < 0.010:
             return None
-
         df, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
         if df is None or len(df) == 0:
             return None
         last = df.iloc[-1]
-
         if not trade.is_short:
-            # TP LONG MR: prezzo raggiunge la banda VERDE superiore  ← I CERCHI
-            #             OPPURE RSI diventa overbought (>65)
             if current_rate >= last["bb_up"] or last["rsi"] > self.mr_rsi_hi:
-                return "mr_tp"
+                return "take_profit"      # ← punto di uscita VERDE (profitto)
         else:
-            # TP SHORT MR: prezzo scende alla banda inferiore o RSI < 35
             if current_rate <= last["bb_low"] or last["rsi"] < self.mr_rsi_lo_exit:
-                return "mr_tp"
+                return "take_profit"
         return None
 
-    # ---------------- STOP: Chandelier (trend) / −2% (MR) ----------------
+    # ---------------- STOP-LOSS: linea ROSSA (Chandelier) per OGNI trade long ----------------
     def custom_stoploss(self, pair, trade, current_time, current_rate,
                         current_profit, **kwargs):
-        tag = str(trade.enter_tag or "")
-        if tag.startswith("mr"):
-            return -self.mr_stop  # stop fisso −2%
-
-        # trend: Chandelier ATR trailing
+        # Chiude in PERDITA quando il prezzo scende alla linea ROSSA (Chandelier 3×ATR).
+        # Trailing: lo stop sale insieme al massimo del trade. Uguale per tutti i long.
         df, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
         if df is None or len(df) == 0:
             return None
