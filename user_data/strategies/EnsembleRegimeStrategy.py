@@ -9,9 +9,9 @@ EnsembleRegimeStrategy — bot a commutazione di regime, 15m, SOL/USD:USD.
     RANGE (0)  FISSO    : esce a bb_up (banda superiore di Bollinger) con profit ≥0.3%.
     BEAR (-1)  SEGNALE  : esce su segnale regime (populate_exit_trend).
 
-  INGRESSO — "V-BOUNCE" + filtro direzionale (+DI/-DI):
+  INGRESSO — "V-BOUNCE":
     A) DIP & RIMBALZO : dip recente (RSI<40 o low<bb_low) + prima candela verde +
-                        +DI > -DI (i compratori tornano) + bb_mid stabile
+                        bb_mid stabile (non in discesa prolungata)
     B) PULLBACK UP    : in regime +1, storno leggero (RSI<50) che rimbalza
 
   Sul grafico:
@@ -172,11 +172,10 @@ class EnsembleRegimeStrategy(IStrategy):
         # discesa la fa scendere di oltre 0.5% (blocca). Soglia da tarare col backtest.
         bb_not_falling = d["bb_mid"] >= d["bb_mid"].shift(5) * 0.995
 
-        # I compratori devono dominare i venditori (+DI > -DI).
-        # Questo è il filtro chiave che i grandi trader usano sempre con ADX:
-        # blocca le entrate quando i venditori controllano ancora il mercato,
-        # anche se ADX non è ancora alto e regime non ha dichiarato -1.
-        buyers_win = d["plus_di"] > d["minus_di"]
+        # NB: NON usiamo +DI > -DI come filtro d'ingresso. Al fondo di un dip il
+        # prezzo è appena sceso, quindi -DI domina sempre +DI (il DMI è lento). Per
+        # un dip-buyer quel filtro blocca OGNI entrata. Contro la discesa prolungata
+        # usiamo bb_not_falling, che reagisce subito senza il ritardo del DMI.
 
         # STRADA A — DIP & RIMBALZO (range o V netta). Prima singola candela verde.
         dip_bounce = (
@@ -184,7 +183,6 @@ class EnsembleRegimeStrategy(IStrategy):
             & just_had_dip
             & enough_room
             & bb_not_falling
-            & buyers_win
             & turning_up
         )
 
