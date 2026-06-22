@@ -6,8 +6,10 @@ EnsembleRegimeStrategy — bot a commutazione di regime, 15m, SOL/USD:USD.
     TAKE-PROFIT : il prezzo tocca la linea VERDE (bb_up) con almeno +0.3% → chiude in GUADAGNO
     STOP-LOSS   : il prezzo scende alla linea ROSSA (close - 3×ATR)       → chiude in PERDITA
 
-  INGRESSO — UNICO, "compra il dip che rimbalza" (tranne nei downtrend forti):
-    regime != -1  +  close<bb_mid  +  RSI<42  +  candela verde  +  RSI in recupero
+  INGRESSO — "V-BOUNCE": compra la PRIMA candela verde dopo un dip. Due strade:
+    A) DIP & RIMBALZO  : c'è stato un dip negli ultimi 3 (minimo sul fondo o RSI
+                         ipervenduto) e ORA gira su → prende anche le V veloci.
+    B) PULLBACK in UP  : in uptrend confermato, storno leggero (RSI<50) che rimbalza.
     In un trend senza storni NON entra (niente muro di ingressi): uno per ogni ribasso.
 
   Sul grafico:
@@ -45,6 +47,11 @@ class EnsembleRegimeStrategy(IStrategy):
     mr_rsi_lo = 42.0         # RSI sotto questa soglia = dip → ingresso
     mr_rsi_hi = 65.0         # RSI sopra questa soglia = overbought → take-profit (i cerchi)
     mr_rsi_lo_exit = 35.0    # RSI per uscita short
+
+    # ===== V-Bounce: catturare PIÙ "V" (le entrate che azzeccano) =====
+    dip_lookback = 3         # candele indietro in cui cercare il dip (per le V veloci)
+    dip_rsi = 40.0           # RSI ipervenduto nel lookback = "c'è stato un vero dip"
+    trend_pull_rsi = 50.0    # in uptrend i pullback sono leggeri: RSI più alto consentito
 
     process_only_new_candles = True
     use_exit_signal = True
@@ -127,23 +134,48 @@ class EnsembleRegimeStrategy(IStrategy):
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         d = dataframe
 
-        # INGRESSO UNICO — "compra il DIP che rimbalza", tranne nei downtrend forti.
-        # Elimina il muro di triangoli: in un trend SENZA storni NON entra (RSI resta alto),
-        # entra solo quando il prezzo storna e poi rimbalza = UN ingresso per ogni ribasso.
-        #   regime != -1   → non in trend giù confermato (lì si sta fuori dal mercato)
-        #   close < bb_mid → metà bassa del canale = "compra basso"
-        #   rsi < 42       → c'è stato un dip (in trend forte senza pullback aspetta)
-        #   close > open   → candela verde = rimbalzo già iniziato, non coltello che cade
-        #   rsi > rsi[-2]  → RSI sta risalendo dal minimo (conferma della svolta)
-        long_dip = (
-            (d["regime"] != -1)
-            & (d["close"] < d["bb_mid"])
-            & (d["rsi"] < self.mr_rsi_lo)
-            & (d["close"] > d["open"])
-            & (d["rsi"] > d["rsi"].shift(2))
-            & (d["volume"] > 0)
+        # ===== V-BOUNCE: compra la prima candela verde dopo un dip =====
+        # "La svolta": candela verde + RSI che risale = il rimbalzo è GIÀ partito
+        # (non un coltello che cade). Comune a tutte e due le strade.
+        turning_up = (
+            (d["close"] > d["open"])              # candela verde
+            & (d["rsi"] > d["rsi"].shift(1))      # RSI risale dalla candela precedente
+            & (d["volume"] > 0)                   # (shift 1, non 2: nelle V veloci 2
+        )                                         #  candele fa l'RSI era PRIMA del dip)
+
+        # "C'è stato un dip negli ultimi N?" — guarda INDIETRO, non solo questa candela.
+        # Le V veloci rimbalzano così in fretta che la candela verde ha già superato
+        # bb_mid: se pretendessimo close<bb_mid le perderemmo (è il caso del 20/06).
+        # Basta che, di recente, il MINIMO abbia toccato il fondo (bb_low) OPPURE
+        # l'RSI sia sceso in ipervenduto.
+        recently_oversold = (
+            (d["rsi"].shift(1).rolling(self.dip_lookback).min() < self.dip_rsi)
+            | (d["low"].rolling(self.dip_lookback).min() < d["bb_low"])
         )
-        d.loc[long_dip, ["enter_long", "enter_tag"]] = (1, "dip_long")
+
+        # STRADA A — DIP & RIMBALZO (range o V netta). Cattura le V veloci.
+        #   regime != -1  → non in downtrend confermato
+        #   close < bb_up → non comprare già attaccati alla linea verde (in cima)
+        dip_bounce = (
+            (d["regime"] != -1)
+            & recently_oversold
+            & (d["close"] < d["bb_up"])
+            & turning_up
+        )
+
+        # STRADA B — PULLBACK IN UPTREND. In salita l'RSI resta alto: uno storno
+        # leggero non scende sotto 42 (è il caso del 21/06). Solo in trend confermato
+        # (+1) accettiamo un pullback più dolce: close sotto la metà banda, RSI < 50
+        # ma non in crollo (> 35).
+        trend_pullback = (
+            (d["regime"] == 1)
+            & (d["close"] < d["bb_mid"])
+            & (d["rsi"] < self.trend_pull_rsi)
+            & (d["rsi"] > self.mr_rsi_lo_exit)
+            & turning_up
+        )
+
+        d.loc[dip_bounce | trend_pullback, ["enter_long", "enter_tag"]] = (1, "v_bounce")
 
         if self.enable_shorts:
             short_pop = (
