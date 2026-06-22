@@ -63,7 +63,7 @@ class EnsembleRegimeStrategy(IStrategy):
     dip_lookback = 3         # candele indietro in cui cercare il dip (per le V veloci)
     dip_rsi = 40.0           # RSI ipervenduto nel lookback = "c'è stato un vero dip"
     trend_pull_rsi = 50.0    # in uptrend i pullback sono leggeri: RSI più alto consentito
-    min_rr = 1.0             # R:R minimo all'ingresso: (bb_up−close) ≥ min_rr×(3×ATR). Validato su 15m reale
+    min_rr = 0.8             # R:R minimo all'ingresso: (bb_up−close) ≥ min_rr×(3×ATR). 0.8 validato OOS: PF 0.694→0.718
     htf_rsi_floor = 45.0     # 1h: sotto questo RSI il trend è troppo debole per comprare il dip (= cerchio rosso)
 
     process_only_new_candles = True
