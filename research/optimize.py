@@ -155,7 +155,7 @@ def analyze_asset(asset, n_samples=400, n_folds=6, seed=11):
     OUT.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(
         OUT / f"{asset}.npz",
-        dates=df["date"].astype("int64").to_numpy(),
+        dates=df["date"].values.astype("datetime64[ns]").astype("int64"),  # ns stabile
         close=df["close"].to_numpy(),
         regime=reg,
         bh_step=bh["ret_step"],

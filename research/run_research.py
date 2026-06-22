@@ -19,6 +19,13 @@ import pandas as pd
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+
+
+def fmt_dates(ax):
+    """Asse temporale leggibile: un tick per anno."""
+    ax.xaxis.set_major_locator(mdates.YearLocator())
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "results" / "research"
@@ -32,10 +39,16 @@ def eq_from_step(step):
     return np.cumprod(1.0 + np.nan_to_num(step))
 
 
+def _to_dt(arr):
+    """Interpreta gli interi-data rilevando l'unita' dalla magnitudine (ns/us/ms/s)."""
+    v = abs(int(arr[0]))
+    unit = "ns" if v > 1e17 else "us" if v > 1e14 else "ms" if v > 1e11 else "s"
+    return pd.to_datetime(arr, unit=unit)
+
+
 def load_npz(asset):
     z = np.load(OUT / f"{asset}.npz", allow_pickle=True)
-    dates = pd.to_datetime(z["dates"])
-    return z, dates
+    return z, _to_dt(z["dates"])
 
 
 def plot_equity(asset):
@@ -56,6 +69,7 @@ def plot_equity(asset):
     ax.set_title(f"{asset} 1h — Ensemble a regime vs Buy&Hold  (2021–2026, costi reali, no lookahead)")
     ax.grid(True, which="both", alpha=0.25)
     ax.legend(fontsize=9, loc="upper left")
+    fmt_dates(ax)
     fig.tight_layout()
     fig.savefig(OUT / f"{asset}_equity.png", dpi=115)
     plt.close(fig)
@@ -82,6 +96,7 @@ def plot_oos(asset, split="2024-01-01"):
     ax2.fill_between(d, dd * 100, 0, color="#2ca02c", alpha=0.45, label="Ensemble drawdown")
     ax2.plot(d, ddb * 100, color="black", alpha=0.5, lw=1.0, label="Buy&Hold drawdown")
     ax2.set_ylabel("Drawdown %"); ax2.grid(True, alpha=0.25); ax2.legend(fontsize=8, loc="lower left")
+    fmt_dates(ax2)
     fig.tight_layout()
     fig.savefig(OUT / f"{asset}_oos.png", dpi=115)
     plt.close(fig)
@@ -102,6 +117,7 @@ def plot_regime(asset):
     ax.set_title(f"{asset} 1h — Regime detection: il bot accende il modulo giusto per ogni fase di mercato")
     ax.legend(fontsize=9, loc="upper left", framealpha=0.9)
     ax.grid(True, which="both", alpha=0.2)
+    fmt_dates(ax)
     fig.tight_layout()
     fig.savefig(OUT / f"{asset}_regime.png", dpi=115)
     plt.close(fig)
@@ -119,6 +135,7 @@ def plot_dashboard():
         ax.plot(dates, el, color="#2ca02c", lw=1.3, label="Ensemble long")
         ax.plot(dates, bh, color="black", alpha=0.5, lw=1.0, label="Buy&Hold")
         ax.set_yscale("log"); ax.set_title(f"{asset} — full period"); ax.grid(True, which="both", alpha=0.2)
+        fmt_dates(ax)
         if j == 0:
             ax.legend(fontsize=8); ax.set_ylabel("Equity 1000€ (log)")
         # riga 1: OOS ensemble vs buy&hold
@@ -131,6 +148,7 @@ def plot_dashboard():
         ax.set_yscale("log"); ax.set_title(f"{asset} — walk-forward OOS"); ax.grid(True, which="both", alpha=0.2)
         m = summary[asset]["wfo_oos"]; mb = summary[asset]["bh_oos"]
         ax.set_xlabel(f"ens DD {m['dd']*100:.0f}% Calmar {m['calmar']:.2f} | BH DD {mb['dd']*100:.0f}%")
+        fmt_dates(ax)
         if j == 0:
             ax.legend(fontsize=8); ax.set_ylabel("Equity 1000€ (log)")
     fig.suptitle("Trading bot potenziato — Ensemble a regime vs Buy&Hold (dati reali 1h, costi inclusi)", fontsize=13)

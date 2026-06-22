@@ -176,33 +176,23 @@ def monte_carlo(ret_step: np.ndarray, n_paths: int = 1000, block: int = 24, seed
     return dict(
         final_p5=np.percentile(finals, 5), final_p50=np.percentile(finals, 50),
         final_p95=np.percentile(finals, 95),
-        dd_p50=np.percentile(dds, 50), dd_p95=np.percentile(dds, 95),
+        dd_p50=np.percentile(dds, 50),
+        dd_worst5=np.percentile(dds, 5),   # coda peggiore (5% dei casi piu' brutti)
         prob_profit=float((finals > 0).mean()),
     )
 
 
-# --------------------------- DEFLATED SHARPE ---------------------------
-def deflated_sharpe(sharpe: float, n_trials: int, n_obs: int,
-                    skew: float = 0.0, kurt: float = 3.0) -> float:
-    """Probabilita' (approssimata) che lo Sharpe sia >0 al netto dei test multipli.
-    Bailey & Lopez de Prado. n_trials = configurazioni provate."""
-    from math import erf, log, sqrt
-    if n_trials < 2 or n_obs < 10 or not np.isfinite(sharpe):
+# --------------------------- PROBABILISTIC SHARPE ---------------------------
+def probabilistic_sharpe(sharpe_ann: float, n_obs: int,
+                         skew: float = 0.0, kurt: float = 3.0, sr0_ann: float = 0.0) -> float:
+    """PSR (Bailey & Lopez de Prado): probabilita' che lo Sharpe VERO sia > sr0.
+    Tiene conto di numerosita' campionaria, asimmetria e code grasse dei rendimenti.
+    Input in unita' ANNUALIZZATE; convertito internamente a per-osservazione."""
+    from math import erf, sqrt
+    if n_obs < 10 or not np.isfinite(sharpe_ann):
         return np.nan
-    emc = 0.5772156649
-    # Sharpe atteso massimo sotto l'ipotesi nulla (nessun edge), su n_trials prove
-    z_inv = lambda q: np.sqrt(2) * _erfinv(2 * q - 1)
-    e_max = sqrt(2 * log(n_trials)) - (log(log(n_trials)) + log(4 * np.pi)) / (2 * sqrt(2 * log(n_trials)))
-    sr0 = e_max  # soglia (per-osservazione, gia' in unita' di Sharpe campionario)
-    sr_per_obs = sharpe / sqrt(BARS_YEAR)         # de-annualizza
-    denom = sqrt(1 - skew * sr_per_obs + (kurt - 1) / 4.0 * sr_per_obs ** 2)
-    z = (sr_per_obs - sr0 / sqrt(BARS_YEAR)) * sqrt(n_obs - 1) / max(denom, 1e-9)
-    return 0.5 * (1 + erf(z / sqrt(2)))
-
-
-def _erfinv(x: float) -> float:
-    # approssimazione di Winitzki per erf^-1 (sufficiente qui)
-    a = 0.147
-    ln = np.log(1 - x * x)
-    t = 2 / (np.pi * a) + ln / 2
-    return np.sign(x) * np.sqrt(np.sqrt(t * t - ln / a) - t)
+    sr = sharpe_ann / sqrt(BARS_YEAR)        # de-annualizza
+    sr0 = sr0_ann / sqrt(BARS_YEAR)
+    denom = sqrt(max(1.0 - skew * sr + (kurt - 1.0) / 4.0 * sr * sr, 1e-9))
+    z = (sr - sr0) * sqrt(n_obs - 1) / denom
+    return 0.5 * (1.0 + erf(z / sqrt(2)))
