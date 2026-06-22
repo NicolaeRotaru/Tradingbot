@@ -3,8 +3,8 @@
 EnsembleRegimeStrategy — bot a commutazione di regime, 15m, SOL/USD:USD.
 
   USCITA — sistema a DUE LINEE, IDENTICO per OGNI trade long:
-    TAKE-PROFIT : il prezzo tocca la linea VERDE (bb_up) con almeno +1% → chiude in GUADAGNO
-    STOP-LOSS   : il prezzo scende alla linea ROSSA (Chandelier 3×ATR)   → chiude in PERDITA
+    TAKE-PROFIT : il prezzo tocca la linea VERDE (bb_up) con almeno +0.3% → chiude in GUADAGNO
+    STOP-LOSS   : il prezzo scende alla linea ROSSA (close - 3×ATR)       → chiude in PERDITA
 
   INGRESSO — UNICO, "compra il dip che rimbalza" (tranne nei downtrend forti):
     regime != -1  +  close<bb_mid  +  RSI<42  +  candela verde  +  RSI in recupero
@@ -51,9 +51,9 @@ class EnsembleRegimeStrategy(IStrategy):
     exit_profit_only = True
     startup_candle_count = 700
 
-    # custom_exit vende a bb_up se profit >= 1% (punta a 1.5-3%).
-    # Fallback: dopo 2h (8 candele 15m) accetta qualsiasi +1%.
-    minimal_roi = {"0": 100.0, "120": 0.01}
+    # custom_exit vende a bb_up se profit >= 0.3% (copre fees, punta a 1.5-3%).
+    # Fallback: dopo 2h (8 candele 15m) accetta qualsiasi +0.5%.
+    minimal_roi = {"0": 100.0, "120": 0.005}
     stoploss = -0.05
     use_custom_stoploss = True
     trailing_stop = False
@@ -109,7 +109,7 @@ class EnsembleRegimeStrategy(IStrategy):
         vol    = d["close"].diff().abs().rolling(96).sum()
         d["er"] = (change / vol.replace(0.0, np.nan)).fillna(0.0)
 
-        # Chandelier trailing stop: max(high,14) − 3×ATR (livello di stop dei long).
+        # Chandelier trailing stop: max(high,14) − 3×ATR (usato da custom_stoploss).
         d["chan_stop"] = d["high"].rolling(14).max() - self.chandelier_long * d["atr"]
 
         # Regime: +1 trend-su, −1 trend-giù, 0 laterale
@@ -119,8 +119,8 @@ class EnsembleRegimeStrategy(IStrategy):
         d.loc[is_trend & (d["ema50"] < d["ema200"]) & (d["close"] < d["ema200"]), "regime"] = -1
 
         # ===== LE UNICHE DUE LINEE MOSTRATE SUL GRAFICO =====
-        d["take_profit"] = d["bb_up"]      # VERDE: dove il bot chiude in PROFITTO
-        d["stop_loss"]   = d["chan_stop"]  # ROSSO: dove il bot chiude in PERDITA
+        d["take_profit"] = d["bb_up"]                                    # VERDE: dove il bot chiude in PROFITTO
+        d["stop_loss"]   = d["close"] - self.chandelier_long * d["atr"]  # ROSSO: sempre sotto il prezzo attuale
         return dataframe
 
     # ---------------- INGRESSI ----------------
@@ -170,11 +170,9 @@ class EnsembleRegimeStrategy(IStrategy):
 
     # ---------------- TAKE-PROFIT: linea VERDE (bb_up) per OGNI trade long ----------------
     def custom_exit(self, pair, trade, current_time, current_rate, current_profit, **kwargs):
-        # Chiude in PROFITTO quando il prezzo raggiunge la linea VERDE (bb_up),
-        # ma solo se il guadagno è almeno +1% (niente micro-uscite flat).
-        # IMPORTANTE: vale per TUTTI i long (trend E mean-reversion) — prima i trend
-        # NON usavano questa uscita e restavano aperti (= "entry senza puntino giallo").
-        if current_profit < 0.010:
+        # Chiude in PROFITTO quando il prezzo raggiunge la linea VERDE (bb_up).
+        # Soglia minima 0.3%: copre le fees senza bloccare uscite valide.
+        if current_profit < 0.003:
             return None
         df, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
         if df is None or len(df) == 0:
