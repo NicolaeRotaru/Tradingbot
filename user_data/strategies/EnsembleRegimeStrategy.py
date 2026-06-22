@@ -65,23 +65,11 @@ class EnsembleRegimeStrategy(IStrategy):
 
     leverage_num = 1.0
 
+    # Sul grafico SOLO due linee: verde = take-profit, rossa = stop-loss.
     plot_config = {
         "main_plot": {
-            "ema50":     {"color": "orange"},
-            "ema200":    {"color": "#4477ff"},           # blu = EMA lenta (filtro trend)
-            "bb_low":    {"color": "#666666"},           # grigio scuro = zona ingresso MR
-            "bb_mid":    {"color": "#999999"},           # grigio = media BB
-            "bb_up":     {"color": "#00dd55"},           # VERDE = linea take-profit MR ← i cerchi!
-            "chan_stop":  {"color": "#ff3333"},           # ROSSO = trailing stop trend (Chandelier)
-        },
-        "subplots": {
-            "ADX / ER": {
-                "adx": {"color": "#dd2222"},
-                "er":  {"color": "#22cc22"},
-            },
-            "Regime (+1 trend / 0 range / -1 down)": {
-                "regime": {"color": "#bb44ff"},
-            },
+            "take_profit": {"color": "#00dd55"},   # 🟢 VERDE = chiude in PROFITTO
+            "stop_loss":   {"color": "#ff3333"},   # 🔴 ROSSO = chiude in PERDITA
         },
     }
 
@@ -121,8 +109,7 @@ class EnsembleRegimeStrategy(IStrategy):
         vol    = d["close"].diff().abs().rolling(96).sum()
         d["er"] = (change / vol.replace(0.0, np.nan)).fillna(0.0)
 
-        # Chandelier trailing stop (LINEA ROSSA): max(high,14) − 5×ATR
-        # Mostra dove il trade di trend verrebbe stoppato se il prezzo scende fin lì.
+        # Chandelier trailing stop: max(high,14) − 3×ATR (livello di stop dei long).
         d["chan_stop"] = d["high"].rolling(14).max() - self.chandelier_long * d["atr"]
 
         # Regime: +1 trend-su, −1 trend-giù, 0 laterale
@@ -130,6 +117,10 @@ class EnsembleRegimeStrategy(IStrategy):
         d["regime"] = 0
         d.loc[is_trend & (d["ema50"] > d["ema200"]) & (d["close"] > d["ema200"]), "regime"] =  1
         d.loc[is_trend & (d["ema50"] < d["ema200"]) & (d["close"] < d["ema200"]), "regime"] = -1
+
+        # ===== LE UNICHE DUE LINEE MOSTRATE SUL GRAFICO =====
+        d["take_profit"] = d["bb_up"]      # VERDE: dove il bot chiude in PROFITTO
+        d["stop_loss"]   = d["chan_stop"]  # ROSSO: dove il bot chiude in PERDITA
         return dataframe
 
     # ---------------- INGRESSI ----------------
