@@ -2,22 +2,27 @@
 """
 EnsembleRegimeStrategy — bot a commutazione di regime, 15m, SOL/USD:USD.
 
-  USCITA — ADATTIVA in base al regime:
-    BULL (+1) TRAILING  : il bot sale con le candele. La linea VERDE è sotto il prezzo
-                          e sale con esso. Esce solo quando il prezzo scende 1×ATR dal max
-                          del trade (profit ≥1%). Così cattura tutto il trend bull.
-    RANGE (0)  FISSO    : esce a bb_up (banda superiore di Bollinger) con profit ≥0.3%.
-    BEAR (-1)  SEGNALE  : esce su segnale regime (populate_exit_trend).
+  USCITA — ADATTIVA per regime:
+    BULL (+1)  TRAILING  : linea VERDE sale con ogni candela (max_high×3 − 1×ATR).
+                           Esce solo quando il prezzo scende a toccarla (profit ≥1%).
+                           Cattura tutto il movimento bull senza uscire sul rumore.
+    RANGE >EMA50 (0)    : linea VERDE a bb_up (mean reversion piena).
+    RANGE <EMA50 (0)    : linea VERDE a bb_mid (rimbalzi più corti → target compresso).
+    BEAR (-1)  SEGNALE  : esce su segnale regime; nessun nuovo ingresso in bear.
 
   INGRESSO — "V-BOUNCE":
-    A) DIP & RIMBALZO : dip recente (RSI<40 o low<bb_low) + prima candela verde +
-                        bb_mid stabile (non in discesa prolungata)
+    A) DIP & RIMBALZO : dip recente (RSI<40 o low<bb_low) + prima candela verde
+                        + bb_mid stabile + volatilità non estrema (veto ATR%)
     B) PULLBACK UP    : in regime +1, storno leggero (RSI<50) che rimbalza
 
+  Filtri anti-coltello che cadono:
+    bb_not_falling : bb_mid non è scesa >0.5% in 5 candele (blocca discese prolungate)
+    atr_veto       : ATR% nel top 20% degli ultimi 200 bar → volatilità da crash → skip
+
   Sul grafico:
-    VERDE trailing TP : in BULL sale con le candele (esce quando scende a toccarla)
-    VERDE bb_up       : in RANGE target fisso sopra il prezzo
-    ROSSO stop_loss   : Chandelier 3×ATR sotto il prezzo (sale col trade)
+    VERDE trailing : in BULL sale con le candele (segue i massimi → "tocca" ogni candela)
+    VERDE fisso    : in RANGE mostra il target (bb_up o bb_mid per contesto EMA50)
+    ROSSO          : Chandelier 3×ATR sotto il prezzo (sale col trade)
 """
 from datetime import datetime
 
@@ -134,13 +139,21 @@ class EnsembleRegimeStrategy(IStrategy):
         d.loc[is_trend & (d["ema50"] > d["ema200"]) & (d["close"] > d["ema200"]), "regime"] =  1
         d.loc[is_trend & (d["ema50"] < d["ema200"]) & (d["close"] < d["ema200"]), "regime"] = -1
 
-        # ===== LE DUE LINEE SUL GRAFICO =====
-        # VERDE in BULL: trailing TP — sale con le candele, il bot esce quando scende a toccarla.
-        #   = max(high, ultimi 5) - 1×ATR: una linea sotto i massimi recenti che segue il prezzo.
-        # VERDE in RANGE: target fisso a bb_up (banda superiore di Bollinger).
-        trailing_tp = d["high"].rolling(5).max() - 1.0 * d["atr"]
-        d["take_profit"] = np.where(d["regime"] == 1, trailing_tp, d["bb_up"])
-        d["stop_loss"]   = d["close"] - self.chandelier_long * d["atr"]  # ROSSO: sempre sotto il prezzo
+        # ===== ATR VETO: blocca entrate in volatilità da crash =====
+        # atr_pct = ATR come % del prezzo. Se è nel top 20% degli ultimi 200 bar
+        # = mercato in crollo o spike → knife-catching → non entrare.
+        atr_pct = d["atr"] / d["close"]
+        d["atr_veto"] = atr_pct > atr_pct.rolling(200, min_periods=100).quantile(0.80)
+
+        # ===== LINEA VERDE — adattiva per regime =====
+        # BULL         : trailing tight (max_high×3 − 1×ATR). Sale con ogni candela alta
+        #                → la linea "tocca" i massimi salendo con il prezzo in bull.
+        # RANGE >EMA50 : bb_up (target pieno: mean reversion classica).
+        # RANGE <EMA50 : bb_mid (rimbalzi più corti in contesto ribassista → target compresso).
+        trail_bull = d["high"].rolling(3).max() - 1.0 * d["atr"]
+        range_tp   = np.where(d["close"] > d["ema50"], d["bb_up"], d["bb_mid"])
+        d["take_profit"] = np.where(d["regime"] == 1, trail_bull, range_tp)
+        d["stop_loss"]   = d["close"] - self.chandelier_long * d["atr"]
         return dataframe
 
     # ---------------- INGRESSI ----------------
@@ -175,7 +188,11 @@ class EnsembleRegimeStrategy(IStrategy):
         # NB: NON usiamo +DI > -DI come filtro d'ingresso. Al fondo di un dip il
         # prezzo è appena sceso, quindi -DI domina sempre +DI (il DMI è lento). Per
         # un dip-buyer quel filtro blocca OGNI entrata. Contro la discesa prolungata
-        # usiamo bb_not_falling, che reagisce subito senza il ritardo del DMI.
+        # usiamo bb_not_falling e atr_veto, che reagiscono subito senza il ritardo del DMI.
+
+        # Veto volatilità estrema: se ATR% è nel top 20% degli ultimi 200 bar = crash/spike.
+        # Il prezzo continua a scendere anche con RSI basso → no entrata.
+        atr_safe = ~d["atr_veto"]
 
         # STRADA A — DIP & RIMBALZO (range o V netta). Prima singola candela verde.
         dip_bounce = (
@@ -183,6 +200,7 @@ class EnsembleRegimeStrategy(IStrategy):
             & just_had_dip
             & enough_room
             & bb_not_falling
+            & atr_safe
             & turning_up
         )
 
@@ -193,6 +211,7 @@ class EnsembleRegimeStrategy(IStrategy):
             & (d["rsi"] < self.trend_pull_rsi)
             & (d["rsi"] > self.mr_rsi_lo_exit)
             & enough_room
+            & atr_safe
             & turning_up
         )
 
@@ -244,8 +263,10 @@ class EnsembleRegimeStrategy(IStrategy):
                 if last["rsi"] > 78:
                     return "take_profit"
             else:
-                # RANGE / BEAR — target fisso a bb_up (mean reversion classica)
-                if current_rate >= last["bb_up"] or last["rsi"] > self.mr_rsi_hi:
+                # RANGE / BEAR — target adattivo (pre-calcolato in populate_indicators):
+                #   close > EMA50 → bb_up (rimbalzo pieno)
+                #   close < EMA50 → bb_mid (rimbalzo compresso, contesto ribassista)
+                if current_rate >= last["take_profit"] or last["rsi"] > self.mr_rsi_hi:
                     return "take_profit"
         else:
             if current_rate <= last["bb_low"] or last["rsi"] < self.mr_rsi_lo_exit:
