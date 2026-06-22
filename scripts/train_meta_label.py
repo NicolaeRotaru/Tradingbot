@@ -20,14 +20,15 @@ filtro non batte il baseline OOS, NON va messo in produzione.
 """
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA = ROOT / "results" / "ml_dataset_sol.csv"
-EMBARGO_HOURS = 168          # = orizzonte tripla-barriera (1 settimana)
+DATA = ROOT / "results" / "ml_dataset_sol.csv"   # default: dataset 1h (build_ml_dataset.py)
+EMBARGO_HOURS = 168          # = orizzonte tripla-barriera 1h (1 settimana). Per il 15m: --embargo 24
 N_FOLDS = 5
 THRESHOLD = 0.50             # soglia di probabilita' per "prendere" il trade
 
@@ -52,9 +53,19 @@ def econ(returns: np.ndarray) -> dict:
 
 
 def main() -> int:
-    if not DATA.exists():
-        raise SystemExit(f"Manca {DATA}. Esegui prima: python scripts/build_ml_dataset.py")
-    df = pd.read_csv(DATA, parse_dates=["date"]).sort_values("date").reset_index(drop=True)
+    ap = argparse.ArgumentParser(description="Meta-labeling trainer (purged walk-forward + gate OOS).")
+    ap.add_argument("--data", default=str(DATA),
+                    help="CSV del dataset (default 1h). Per il 15m: results/ml_dataset_sol_15m.csv")
+    ap.add_argument("--embargo", type=float, default=EMBARGO_HOURS,
+                    help="embargo in ORE = orizzonte tripla-barriera (1h:168, 15m:24)")
+    args = ap.parse_args()
+    data_path = Path(args.data)
+    embargo_hours = args.embargo
+
+    if not data_path.exists():
+        raise SystemExit(f"Manca {data_path}. Esegui prima il builder del dataset "
+                         f"(build_ml_dataset.py per 1h, build_ml_dataset_15m.py per 15m).")
+    df = pd.read_csv(data_path, parse_dates=["date"]).sort_values("date").reset_index(drop=True)
     feats = [c for c in df.columns if c.startswith("f_")]
     X = df[feats].to_numpy()
     y = df["label"].to_numpy()
@@ -70,7 +81,7 @@ def main() -> int:
         test_idx = np.arange(lo, hi)
         test_start = t.iloc[lo]
         # PURGE + EMBARGO: train solo su trade conclusi prima del test (con margine)
-        embargo = pd.Timedelta(hours=EMBARGO_HOURS)
+        embargo = pd.Timedelta(hours=embargo_hours)
         train_idx = np.where(t < (test_start - embargo))[0]
         if len(train_idx) < 30:
             continue
