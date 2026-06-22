@@ -152,11 +152,19 @@ class EnsembleRegimeStrategy(IStrategy):
         # Se siamo già vicini a bb_up, non c'è margine → non entrare.
         enough_room = (d["bb_up"] - d["close"]) / d["close"] > 0.008
 
+        # Il mercato NON sta scendendo a breve termine: bb_mid (la media) non è caduta
+        # più dello 0.5% rispetto a 5 candele fa (~1h15). Blocca "compra il rimbalzo
+        # dentro una discesa che continua" (regime -1 si accende tardi, bb_mid no).
+        # Tolleranza 0.5%: una V buona abbassa bb_mid di ~0.1-0.3% (passa), una vera
+        # discesa la fa scendere di oltre 0.5% (blocca). Soglia da tarare col backtest.
+        bb_not_falling = d["bb_mid"] >= d["bb_mid"].shift(5) * 0.995
+
         # STRADA A — DIP & RIMBALZO (range o V netta). Prima singola candela verde.
         dip_bounce = (
             (d["regime"] != -1)
             & just_had_dip
             & enough_room
+            & bb_not_falling
             & turning_up
         )
 
