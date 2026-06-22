@@ -1,20 +1,21 @@
 # pragma pylint: disable=missing-docstring, invalid-name, pointless-string-statement
 """
-EnsembleRegimeStrategy — il bot "potenziato" a COMMUTAZIONE DI REGIME.
+EnsembleRegimeStrategy — bot a commutazione di regime, 15m, SOL/USD:USD.
 
-Realizza l'obiettivo nel modo serio (non con promesse da backtest overfittato):
-  - SALE con forza  -> modulo TREND-LONG: cavalca e tiene fino in fondo (Chandelier ATR)
-  - SCENDE con forza -> modulo TREND-SHORT (opzionale, off di default: su SOL peggiora)
-  - PIATTO/laterale  -> modulo MEAN-REVERSION long/short: compra basso, vende alto
+  REGIME  0  (laterale): MEAN-REVERSION
+    Ingresso : close < bb_mid  +  RSI < 42  +  candela verde  +  RSI in recupero
+    Uscita TP: prezzo raggiunge bb_up (linea VERDE)  O  RSI > 65  [i cerchi!]
+    Stop     : −2% dall'ingresso (linea ROSSA tratteggiata)
 
-Un classificatore di regime (ADX + Efficiency Ratio + EMA50/200) decide quale modulo
-e' attivo. Sizing e rischio sono nel motore di Freqtrade (stake + protezioni) e nella
-Chandelier; il vol-targeting/Kelly del backtest qui si traducono in stake prudente +
-leva 1x. Mantiene live ≈ backtest: stessa logica, stessi indicatori della ricerca in
-research/ (validata walk-forward out-of-sample su SOL/BTC/ETH 1h).
+  REGIME +1  (trend su): TREND-LONG
+    Ingresso : regime == 1
+    Uscita   : Chandelier trailing stop (linea ROSSA continua sul grafico)
+    Stop rif.: max_close − 5×ATR
 
-⚠️ Avvia SEMPRE in dry-run. Il win-rate del trend-following e' basso (~25-30%): poche
-vincite grandi. Nessuna strategia "vince sempre"; questa massimizza il Calmar robusto.
+  Sul grafico:
+    VERDE  bb_up        = dove il bot chiude in profitto i trade MR (take-profit)
+    ROSSO  chan_stop     = dove scatta lo stop dei trade di trend (Chandelier)
+    Grigio bb_low/bb_mid = zona di ingresso MR
 """
 from datetime import datetime
 
@@ -32,29 +33,32 @@ class EnsembleRegimeStrategy(IStrategy):
     can_short = True
 
     # ===== INTERRUTTORI =====
-    enable_shorts = False   # short di trend: su SOL peggiora (vedi ricerca). Attivabile su asset bidirezionali.
-    enable_mr = True        # mean-reversion nelle fasi laterali (compra basso / vende alto)
+    enable_shorts = False
+    enable_mr = True
 
     # ===== parametri regime =====
     adx_trend = 15.0
     er_trend = 0.20
+
     # ===== modulo trend =====
-    chandelier_long = 5.0   # stop = max_rate - 5*ATR
-    chandelier_short = 3.5  # stop = min_rate + 3.5*ATR (gli short rimbalzano: piu' stretto)
+    chandelier_long = 5.0    # stop = max_close - 5*ATR  (linea rossa sul grafico)
+    chandelier_short = 3.5
+
     # ===== modulo mean-reversion =====
-    mr_rsi_lo = 42.0
-    mr_rsi_hi = 68.0
-    mr_exit_lo = 45.0
-    mr_exit_hi = 55.0
-    mr_stop = 0.02          # hard stop dei trade mean-reversion (2% su 15m: 1:1 R:R col target)
+    mr_rsi_lo = 42.0         # RSI sotto questa soglia = dip → ingresso
+    mr_rsi_hi = 65.0         # RSI sopra questa soglia = overbought → TP (i cerchi)
+    mr_rsi_lo_exit = 35.0    # RSI per uscita short MR
+    mr_stop = 0.02           # stop MR: −2%
 
     process_only_new_candles = True
     use_exit_signal = True
-    exit_profit_only = True   # non uscire in perdita per segnale: aspetta ROI 1% o stop
-    startup_candle_count = 700   # EMA400 + buffer protections su 15m
+    exit_profit_only = True
+    startup_candle_count = 700
 
-    minimal_roi = {"0": 0.01}     # chiudi a +1% di profitto su qualsiasi trade
-    stoploss = -0.05              # rete di sicurezza: max -5% se tutto il resto fallisce
+    # ROI disabilitato: il take-profit MR è gestito da custom_exit (bb_up).
+    # Dopo 3 ore di trade aperto, accetta qualsiasi +1% come fallback.
+    minimal_roi = {"0": 100.0, "180": 0.01}
+    stoploss = -0.05
     use_custom_stoploss = True
     trailing_stop = False
 
@@ -67,13 +71,21 @@ class EnsembleRegimeStrategy(IStrategy):
 
     plot_config = {
         "main_plot": {
-            "ema50": {"color": "orange"}, "ema200": {"color": "blue"},
-            "bb_low": {"color": "grey"}, "bb_up": {"color": "grey"},
+            "ema50":     {"color": "orange"},
+            "ema200":    {"color": "#4477ff"},           # blu = EMA lenta (filtro trend)
+            "bb_low":    {"color": "#666666"},           # grigio scuro = zona ingresso MR
+            "bb_mid":    {"color": "#999999"},           # grigio = media BB
+            "bb_up":     {"color": "#00dd55"},           # VERDE = linea take-profit MR ← i cerchi!
+            "chan_stop":  {"color": "#ff3333"},           # ROSSO = trailing stop trend (Chandelier)
         },
         "subplots": {
-            "ADX": {"adx": {"color": "red"}},
-            "Efficiency Ratio": {"er": {"color": "green"}},
-            "Regime": {"regime": {"color": "purple"}},
+            "ADX / ER": {
+                "adx": {"color": "#dd2222"},
+                "er":  {"color": "#22cc22"},
+            },
+            "Regime (+1 trend / 0 range / -1 down)": {
+                "regime": {"color": "#bb44ff"},
+            },
         },
     }
 
@@ -83,9 +95,8 @@ class EnsembleRegimeStrategy(IStrategy):
 
     @property
     def protections(self):
-        # periodi scalati per 15m: 1h*4 = 4 candele da 15m per ogni ora
         return [
-            {"method": "CooldownPeriod", "stop_duration_candles": 12},   # 3h
+            {"method": "CooldownPeriod", "stop_duration_candles": 12},
             {"method": "MaxDrawdown", "lookback_period_candles": 672,
              "trade_limit": 6, "stop_duration_candles": 288, "max_allowed_drawdown": 0.25},
             {"method": "StoplossGuard", "lookback_period_candles": 192,
@@ -95,56 +106,67 @@ class EnsembleRegimeStrategy(IStrategy):
     # ---------------- INDICATORI ----------------
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         d = dataframe
-        d["ema50"] = ta.EMA(d, timeperiod=50)
+        d["ema50"]  = ta.EMA(d, timeperiod=50)
         d["ema200"] = ta.EMA(d, timeperiod=200)
         d["ema400"] = ta.EMA(d, timeperiod=400)
-        d["rsi"] = ta.RSI(d, timeperiod=14)
-        d["atr"] = ta.ATR(d, timeperiod=14)
-        d["adx"] = ta.ADX(d, timeperiod=14)
+        d["rsi"]    = ta.RSI(d, timeperiod=14)
+        d["atr"]    = ta.ATR(d, timeperiod=14)
+        d["adx"]    = ta.ADX(d, timeperiod=14)
+
         # Bollinger 20,2
         mid = d["close"].rolling(20).mean()
         std = d["close"].rolling(20).std(ddof=0)
         d["bb_mid"] = mid
         d["bb_low"] = mid - 2.0 * std
-        d["bb_up"] = mid + 2.0 * std
-        # Efficiency Ratio (Kaufman) su 96 barre (= 24h su 15m): "trendiness" 0..1
+        d["bb_up"]  = mid + 2.0 * std          # ← LINEA VERDE take-profit MR
+
+        # Efficiency Ratio 96 barre = 24h su 15m
         change = (d["close"] - d["close"].shift(96)).abs()
-        vol = d["close"].diff().abs().rolling(96).sum()
+        vol    = d["close"].diff().abs().rolling(96).sum()
         d["er"] = (change / vol.replace(0.0, np.nan)).fillna(0.0)
-        # Regime: +1 trend-up, -1 trend-down, 0 range
+
+        # Chandelier trailing stop (LINEA ROSSA): max(high,14) − 5×ATR
+        # Mostra dove il trade di trend verrebbe stoppato se il prezzo scende fin lì.
+        d["chan_stop"] = d["high"].rolling(14).max() - self.chandelier_long * d["atr"]
+
+        # Regime: +1 trend-su, −1 trend-giù, 0 laterale
         is_trend = (d["adx"] > self.adx_trend) & (d["er"] > self.er_trend)
         d["regime"] = 0
-        d.loc[is_trend & (d["ema50"] > d["ema200"]) & (d["close"] > d["ema200"]), "regime"] = 1
+        d.loc[is_trend & (d["ema50"] > d["ema200"]) & (d["close"] > d["ema200"]), "regime"] =  1
         d.loc[is_trend & (d["ema50"] < d["ema200"]) & (d["close"] < d["ema200"]), "regime"] = -1
         return dataframe
 
     # ---------------- INGRESSI ----------------
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         d = dataframe
+
         # TREND LONG: regime rialzista
         d.loc[(d["regime"] == 1) & (d["volume"] > 0), ["enter_long", "enter_tag"]] = (1, "trend_long")
 
-        # MEAN-REVERSION LONG: compra il ribasso nelle fasi di range (le zone "cerchiate").
-        #   - regime == 0  -> non in trend forte (su trend giu' netto il regime e' -1 e qui NON entra)
-        #   - close < bb_mid -> meta' bassa del canale = "compra basso"
-        #   - rsi < 42 -> dip moderato (non serve l'ipervenduto estremo)
-        #   - close >= close[-1] -> la candela sta gia' rimbalzando (non comprare mentre cade)
-        #   NB: tolto il filtro close>ema200, che bloccava i dip sotto la linea blu.
+        # MEAN-REVERSION LONG:
+        #   ema50 > ema200      → macro trend su (BLOCCA tutto il downtrend giugno 2-8!)
+        #   close < bb_mid      → metà bassa del canale (compra basso)
+        #   rsi < 42            → dip moderato
+        #   close > open        → candela VERDE corrente (rimbalzo in corso, non coltello che cade)
+        #   rsi > rsi[-2]       → RSI in recupero da minimo (conferma della svolta)
         if self.enable_mr:
             d.loc[
-                (d["regime"] == 0) & (d["close"] < d["bb_mid"]) & (d["rsi"] < self.mr_rsi_lo)
-                & (d["close"] >= d["close"].shift(1)) & (d["volume"] > 0),
+                (d["regime"] == 0)
+                & (d["ema50"] > d["ema200"])
+                & (d["close"] < d["bb_mid"])
+                & (d["rsi"] < self.mr_rsi_lo)
+                & (d["close"] > d["open"])
+                & (d["rsi"] > d["rsi"].shift(2))
+                & (d["volume"] > 0),
                 ["enter_long", "enter_tag"],
             ] = (1, "mr_long")
 
         if self.enable_shorts:
-            # TREND SHORT: regime ribassista MACRO confermato
             d.loc[
                 (d["regime"] == -1) & (d["close"] < d["ema400"]) & (d["volume"] > 0),
                 ["enter_short", "enter_tag"],
             ] = (1, "trend_short")
             if self.enable_mr:
-                # MEAN-REVERSION SHORT: range + ipercomprato + sotto EMA200 (vende il rialzo in downtrend)
                 d.loc[
                     (d["regime"] == 0) & (d["close"] > d["bb_up"]) & (d["rsi"] > self.mr_rsi_hi)
                     & (d["close"] < d["ema200"]) & (d["volume"] > 0),
@@ -152,39 +174,48 @@ class EnsembleRegimeStrategy(IStrategy):
                 ] = (1, "mr_short")
         return dataframe
 
-    # ---------------- USCITE A SEGNALE (la Chandelier la fa custom_stoploss) ----------------
+    # ---------------- USCITE A SEGNALE ----------------
     def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         d = dataframe
-        # trend long: esce quando il prezzo perde la EMA200
+        # trend long: regime cambia (exit_profit_only=True → solo se in profitto)
         d.loc[(d["regime"] != 1) & (d["close"] < d["ema200"]) & (d["volume"] > 0), "exit_long"] = 1
         if self.enable_shorts:
             d.loc[(d["regime"] != -1) & (d["close"] > d["ema200"]) & (d["volume"] > 0), "exit_short"] = 1
         return dataframe
 
-    # ---------------- USCITA MEAN-REVERSION (ritorno alla media) ----------------
+    # ---------------- TAKE-PROFIT MR (i cerchi!) ----------------
     def custom_exit(self, pair, trade, current_time, current_rate, current_profit, **kwargs):
         if not str(trade.enter_tag or "").startswith("mr"):
+            return None  # i trade di trend vengono gestiti da Chandelier
+
+        # non uscire mai flat o in perdita: aspetta almeno +0.3%
+        if current_profit < 0.003:
             return None
+
         df, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
         if df is None or len(df) == 0:
             return None
         last = df.iloc[-1]
-        if trade.is_short:
-            if current_rate <= last["bb_mid"] or last["rsi"] < self.mr_exit_lo:
-                return "mr_target"
+
+        if not trade.is_short:
+            # TP LONG MR: prezzo raggiunge la banda VERDE superiore  ← I CERCHI
+            #             OPPURE RSI diventa overbought (>65)
+            if current_rate >= last["bb_up"] or last["rsi"] > self.mr_rsi_hi:
+                return "mr_tp"
         else:
-            if current_rate >= last["bb_mid"] or last["rsi"] > self.mr_exit_hi:
-                return "mr_target"
+            # TP SHORT MR: prezzo scende alla banda inferiore o RSI < 35
+            if current_rate <= last["bb_low"] or last["rsi"] < self.mr_rsi_lo_exit:
+                return "mr_tp"
         return None
 
-    # ---------------- STOP: Chandelier (trend) / hard stop (mean-reversion) ----------------
+    # ---------------- STOP: Chandelier (trend) / −2% (MR) ----------------
     def custom_stoploss(self, pair, trade, current_time, current_rate,
                         current_profit, **kwargs):
         tag = str(trade.enter_tag or "")
         if tag.startswith("mr"):
-            # mean-reversion: stop fisso (frazione), gestito come stoploss relativo
-            return -self.mr_stop if not trade.is_short else -self.mr_stop
-        # trend: Chandelier ATR
+            return -self.mr_stop  # stop fisso −2%
+
+        # trend: Chandelier ATR trailing
         df, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
         if df is None or len(df) == 0:
             return None
