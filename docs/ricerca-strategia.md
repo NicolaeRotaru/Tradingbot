@@ -13,6 +13,36 @@
 
 ---
 
+## 🔬 AGGIORNAMENTO — validazione sui dati 15m REALI (il timeframe del bot)
+
+Il backtest sopra è su dati **1h** (proxy). Procurati i dati **15m** reali
+(191.813 candele, 2021–2026), ho rifatto il test sul timeframe vero del bot, con
+il filtro di trend a **1h** (la relazione esatta del live). **Lezione importante:
+il proxy 1h INGANNAVA.**
+
+| variante (OOS 2024-26) | profit factor 1h-proxy | profit factor **15m reale** | expectancy 15m |
+|---|---|---|---|
+| v1 (enough_room + bb_not_falling) | 0,81 | **0,64** | −0,22 %/trade |
+| **v2 (R:R≥1.0 + HTF-1h + knife-veto)** | 0,64 (proxy diceva "peggio") | **0,75** | **−0,13 %/trade** |
+
+- Sul **15m reale** i nuovi filtri **migliorano davvero**: PF 0,64→0,75,
+  asimmetria ridotta (expectancy da −0,22% a −0,13%/trade), e **IS≈OOS (0,76 vs
+  0,75)** = effetto reale, non overfit.
+- I tre filtri v2: **R:R minimo** (entra solo se il target dista ≥ 3×ATR come lo
+  stop), **trend 1h non-orso** (evita di comprare i dip dentro un downtrend
+  grande = i "cerchi rossi"), **veto-coltello** (vol alta *e in espansione*).
+- **MA resta NEGATIVO**: PF 0,75 < 1,0. v2 **perde più piano**, non guadagna.
+  Su tutto il 15m la v1 azzera il conto (−100%), la v2 lo riduce (−51% OOS).
+  Il buy&hold di SOL ha fatto **+3144%** nello stesso periodo.
+
+**Conclusione invariata:** v2 è il miglior V-Bounce che abbiamo, validato con
+rigore sul timeframe vero — ma comprare-il-dip su SOL non ha edge. Va bene per
+imparare in dry-run; **niente soldi veri** (men che meno a leva 10x) finché non
+si passa a una logica con vantaggio reale (trend-following). Riproducibile:
+`python3 scripts/backtest_vbounce.py --data user_data/data_sources/SOL_USDT-15m.csv --htf 1h`.
+
+---
+
 ## 1. Il backtest che cambia tutto
 
 Strumento: `scripts/backtest_vbounce.py` (logica identica al live, dati reali

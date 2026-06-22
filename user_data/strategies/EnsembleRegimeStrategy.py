@@ -10,14 +10,17 @@ EnsembleRegimeStrategy — bot a commutazione di regime, 15m, SOL/USD:USD.
     RANGE <EMA50 (0)    : linea VERDE a bb_mid (rimbalzi più corti → target compresso).
     BEAR (-1)  SEGNALE  : esce su segnale regime; nessun nuovo ingresso in bear.
 
-  INGRESSO — "V-BOUNCE":
+  INGRESSO — "V-BOUNCE" (compra i cerchi VERDI, evita i ROSSI):
     A) DIP & RIMBALZO : dip recente (RSI<40 o low<bb_low) + prima candela verde
-                        + bb_mid stabile + volatilità non estrema (veto ATR%)
+                        + R:R sufficiente + trend 1h non-orso + niente coltello in caduta
     B) PULLBACK UP    : in regime +1, storno leggero (RSI<50) che rimbalza
 
-  Filtri anti-coltello che cadono:
-    bb_not_falling : bb_mid non è scesa >0.5% in 5 candele (blocca discese prolungate)
-    atr_veto       : ATR% nel top 20% degli ultimi 200 bar → volatilità da crash → skip
+  Filtri che separano VERDE (compra) da ROSSO (evita) — VALIDATI sul 15m reale
+  (out-of-sample profit factor 0.64→0.75, expectancy −0.22%→−0.13%/trade):
+    good_rr : spazio al target (bb_up−close) ≥ min_rr × rischio (3×ATR) → riduce l'asimmetria
+    htf_ok  : il trend GRANDE a 1h non è fortemente ribassista (evita i falling-knife)
+    knife   : volatilità alta E ancora in espansione = crollo in corso → skip
+  NB: migliora ma NON rende profittevole (PF 0.75 < 1.0: perde più piano). Vedi ricerca.
 
   Sul grafico:
     VERDE trailing : in BULL sale con le candele (segue i massimi → "tocca" ogni candela)
@@ -30,7 +33,7 @@ import numpy as np
 from pandas import DataFrame
 
 import talib.abstract as ta
-from freqtrade.strategy import IStrategy, stoploss_from_absolute
+from freqtrade.strategy import IStrategy, informative, stoploss_from_absolute
 
 
 class EnsembleRegimeStrategy(IStrategy):
@@ -60,11 +63,13 @@ class EnsembleRegimeStrategy(IStrategy):
     dip_lookback = 3         # candele indietro in cui cercare il dip (per le V veloci)
     dip_rsi = 40.0           # RSI ipervenduto nel lookback = "c'è stato un vero dip"
     trend_pull_rsi = 50.0    # in uptrend i pullback sono leggeri: RSI più alto consentito
+    min_rr = 1.0             # R:R minimo all'ingresso: (bb_up−close) ≥ min_rr×(3×ATR). Validato su 15m reale
+    htf_rsi_floor = 45.0     # 1h: sotto questo RSI il trend è troppo debole per comprare il dip (= cerchio rosso)
 
     process_only_new_candles = True
     use_exit_signal = True
     exit_profit_only = True
-    startup_candle_count = 700
+    startup_candle_count = 800   # EMA200 su 1h = 200×4 = 800 candele 15m (serve all'informative @1h)
 
     # custom_exit gestisce TUTTE le uscite in profitto (target range + trailing bull).
     # ROI temporale DISATTIVATO: il vecchio {"120": 0.005} chiudeva i trade bull a +0.5%
@@ -109,6 +114,18 @@ class EnsembleRegimeStrategy(IStrategy):
              "trade_limit": 3, "stop_duration_candles": 96, "only_per_pair": False},
         ]
 
+    # ---------------- TREND SUPERIORE (1h) — filtro anti falling-knife ----------------
+    @informative("1h")
+    def populate_indicators_1h(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        # Calcolato sulle candele 1h e unito al 15m (colonne con suffisso _1h, shiftate di
+        # una candela = niente lookahead). Serve a sapere se il trend GRANDE è giù: in quel
+        # caso un dip a 15m è un coltello che cade (ROSSO), non un fondo da comprare (VERDE).
+        dataframe["ema50"]    = ta.EMA(dataframe, timeperiod=50)
+        dataframe["ema200"]   = ta.EMA(dataframe, timeperiod=200)
+        dataframe["rsi"]      = ta.RSI(dataframe, timeperiod=14)
+        dataframe["ema50_up"] = (dataframe["ema50"] > dataframe["ema50"].shift(1)).astype(int)
+        return dataframe
+
     # ---------------- INDICATORI ----------------
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         d = dataframe
@@ -147,11 +164,13 @@ class EnsembleRegimeStrategy(IStrategy):
         d.loc[is_trend & (d["ema50"] > d["ema200"]) & (d["close"] > d["ema200"]), "regime"] =  1
         d.loc[is_trend & (d["ema50"] < d["ema200"]) & (d["close"] < d["ema200"]), "regime"] = -1
 
-        # ===== ATR VETO: blocca entrate in volatilità da crash =====
-        # atr_pct = ATR come % del prezzo. Se è nel top 20% degli ultimi 200 bar
-        # = mercato in crollo o spike → knife-catching → non entrare.
-        atr_pct = d["atr"] / d["close"]
-        d["atr_veto"] = atr_pct > atr_pct.rolling(200, min_periods=100).quantile(0.80)
+        # ===== VETO COLTELLO: volatilità ALTA *e in espansione* = crollo in corso =====
+        # Il falling-knife non è solo "vol alta": è vol alta E che cresce ancora (il prezzo
+        # sta ancora cadendo). Se la vol è alta ma si COMPRIME (natr < natr di 3 candele fa)
+        # = esaurimento dei venditori = il fondo BUONO → si può entrare. NATR = ATR/prezzo%.
+        natr = ta.NATR(d, timeperiod=14)
+        natr_pct = natr.rolling(200, min_periods=100).rank(pct=True)
+        d["knife"] = (natr_pct > 0.90) & (natr > natr.shift(3))
 
         # ===== LINEA VERDE — adattiva per regime =====
         # BULL : trailing tipo Chandelier che RATCHETTA — highest_high(22) − bull_trail_atr×ATR,
@@ -187,44 +206,46 @@ class EnsembleRegimeStrategy(IStrategy):
             | (d["low"].shift(1) < d["bb_low"])      # oppure il minimo ha toccato il fondo
         )
 
-        # Deve esserci abbastanza spazio fino alla linea verde (take-profit).
-        # Se siamo già vicini a bb_up, non c'è margine → non entrare.
-        enough_room = (d["bb_up"] - d["close"]) / d["close"] > 0.008
+        # ===== R:R — riduce l'ASIMMETRIA (perdite ~3× le vincite) =====
+        # Entra SOLO se lo spazio al target (bb_up − close) è ≥ min_rr × rischio allo stop
+        # (3×ATR). Così la vincita potenziale è almeno quanto la perdita. Sostituisce
+        # enough_room. Validato su 15m reale: expectancy −0.22% → −0.13%/trade.
+        risk    = self.chandelier_long * d["atr"]
+        good_rr = (d["bb_up"] - d["close"]) >= self.min_rr * risk
 
-        # Il mercato NON sta scendendo a breve termine: bb_mid (la media) non è caduta
-        # più dello 0.5% rispetto a 5 candele fa (~1h15). Blocca "compra il rimbalzo
-        # dentro una discesa che continua" (regime -1 si accende tardi, bb_mid no).
-        # Tolleranza 0.5%: una V buona abbassa bb_mid di ~0.1-0.3% (passa), una vera
-        # discesa la fa scendere di oltre 0.5% (blocca). Soglia da tarare col backtest.
-        bb_not_falling = d["bb_mid"] >= d["bb_mid"].shift(5) * 0.995
+        # ===== HTF — il trend GRANDE (1h) non è fortemente ribassista = evita i ROSSI =====
+        # Un dip a 15m dentro un downtrend 1h è un coltello che cade. Compra solo se:
+        #   close_1h sopra EMA200_1h (contesto non-orso)  OPPURE
+        #   RSI_1h > 45 con EMA50_1h in salita (range/risalita, non caduta libera).
+        # Sostituisce bb_not_falling (più lento e cieco al quadro grande).
+        htf_ok = (
+            (d["close_1h"] > d["ema200_1h"])
+            | ((d["rsi_1h"] > self.htf_rsi_floor) & (d["ema50_up_1h"] == 1))
+        )
 
-        # NB: NON usiamo +DI > -DI come filtro d'ingresso. Al fondo di un dip il
-        # prezzo è appena sceso, quindi -DI domina sempre +DI (il DMI è lento). Per
-        # un dip-buyer quel filtro blocca OGNI entrata. Contro la discesa prolungata
-        # usiamo bb_not_falling e atr_veto, che reagiscono subito senza il ritardo del DMI.
+        # Veto coltello: salta solo quando la volatilità è alta E ancora in espansione.
+        not_knife = ~d["knife"]
 
-        # Veto volatilità estrema: se ATR% è nel top 20% degli ultimi 200 bar = crash/spike.
-        # Il prezzo continua a scendere anche con RSI basso → no entrata.
-        atr_safe = ~d["atr_veto"]
-
-        # STRADA A — DIP & RIMBALZO (range o V netta). Prima singola candela verde.
+        # STRADA A — DIP & RIMBALZO (cerchi VERDI). Prima candela verde dopo un dip, con
+        # spazio al target (R:R), trend 1h non-orso, e nessun coltello in caduta libera.
         dip_bounce = (
             (d["regime"] != -1)
             & just_had_dip
-            & enough_room
-            & bb_not_falling
-            & atr_safe
+            & good_rr
+            & htf_ok
+            & not_knife
             & turning_up
         )
 
-        # STRADA B — PULLBACK IN UPTREND. Close sotto bb_mid + RSI leggero.
+        # STRADA B — PULLBACK IN UPTREND (regime 1 = già allineato col bull, htf implicito).
+        # Storno leggero sotto bb_mid che rimbalza, con R:R sufficiente e nessun coltello.
         trend_pullback = (
             (d["regime"] == 1)
             & (d["close"] < d["bb_mid"])
             & (d["rsi"] < self.trend_pull_rsi)
             & (d["rsi"] > self.mr_rsi_lo_exit)
-            & enough_room
-            & atr_safe
+            & good_rr
+            & not_knife
             & turning_up
         )
 

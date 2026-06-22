@@ -43,9 +43,24 @@ COOLDOWN = 12
 ROI_BARS = 2             # 120 min su 1h = 2 candele
 ROI_PROFIT = 0.005
 BULL_RSI_EXIT = 78.0
+MIN_RR = 1.0              # NUOVO: R:R minimo all'ingresso → (bb_up-close) >= MIN_RR*3*ATR
+HTF_RSI_FLOOR = 45.0      # NUOVO: soglia RSI sul timeframe superiore (qui 4h = analogo del 1h live su 15m)
 
 
-def build(df: pd.DataFrame) -> pd.DataFrame:
+def add_entry_v2(d: pd.DataFrame, min_rr: float) -> None:
+    """d['enter_v2'] = NUOVA logica: R:R + HTF(4h) + veto-coltello.
+    Toglie enough_room e bb_not_falling (filtri grezzi) e li sostituisce con R:R e HTF."""
+    good_rr = (d["bb_up"] - d["close"]) >= min_rr * CHANDELIER * d["atr"]
+    not_knife = ~d["knife"]
+    dip = ((d["regime"] != -1) & d["just_had_dip"] & good_rr & d["htf_ok"]
+           & not_knife & d["turning_up"])
+    trend = ((d["regime"] == 1) & (d["close"] < d["bb_mid"])
+             & (d["rsi"] < TREND_PULL_RSI) & (d["rsi"] > RSI_LO_EXIT)
+             & good_rr & not_knife & d["turning_up"])
+    d["enter_v2"] = (dip | trend).astype(int)
+
+
+def build(df: pd.DataFrame, htf_rule: str = "4h") -> pd.DataFrame:
     d = df.copy()
     d["ema50"] = ema(d["close"], 50)
     d["ema200"] = ema(d["close"], 200)
@@ -64,6 +79,27 @@ def build(df: pd.DataFrame) -> pd.DataFrame:
     just_had_dip = (d["rsi"].shift(1) < DIP_RSI) | (d["low"].shift(1) < d["bb_low"])
     enough_room = (d["bb_up"] - d["close"]) / d["close"] > ENOUGH_ROOM
     bb_not_falling = d["bb_mid"] >= d["bb_mid"].shift(5) * BB_TOL
+    d["turning_up"] = turning_up
+    d["just_had_dip"] = just_had_dip
+
+    # ----- NUOVI FILTRI (v2) -----
+    # knife: volatilità ALTA e ANCORA in espansione = coltello che cade (vs esaurimento)
+    natr = d["atr"] / d["close"] * 100.0
+    natr_pct = natr.rolling(200, min_periods=100).rank(pct=True)
+    d["knife"] = (natr_pct > 0.90) & (natr > natr.shift(3))
+    # HTF: trend del timeframe superiore. Live = 1h sul 15m (4×). Su dati 1h uso 4h (4×);
+    # su dati 15m passo htf_rule="1h" → REPLICA ESATTA del live.
+    # shift(1) sul frame HTF = usa solo la barra GIÀ CHIUSA (niente lookahead), poi ffill.
+    h4 = d.set_index("date")["close"].resample(htf_rule).last()
+    ema50_4h, ema200_4h, rsi_4h = ema(h4, 50), ema(h4, 200), rsi(h4, 14)
+    ema50_up_4h = (ema50_4h > ema50_4h.shift(1)).astype(float)
+    htf = pd.DataFrame({"close_4h": h4, "ema200_4h": ema200_4h,
+                        "rsi_4h": rsi_4h, "ema50_up_4h": ema50_up_4h}).shift(1)
+    d = d.merge(htf, left_on="date", right_index=True, how="left")
+    for c in ("close_4h", "ema200_4h", "rsi_4h", "ema50_up_4h"):
+        d[c] = d[c].ffill()
+    d["htf_ok"] = ((d["close_4h"] > d["ema200_4h"])
+                   | ((d["rsi_4h"] > HTF_RSI_FLOOR) & (d["ema50_up_4h"] >= 0.5)))
 
     dip_bounce = (d["regime"] != -1) & just_had_dip & enough_room & bb_not_falling & turning_up
     trend_pullback = ((d["regime"] == 1) & (d["close"] < d["bb_mid"])
@@ -71,12 +107,13 @@ def build(df: pd.DataFrame) -> pd.DataFrame:
                       & enough_room & turning_up)
     d["enter"] = (dip_bounce | trend_pullback).astype(int)
     d["enter_tag"] = np.where(trend_pullback & ~dip_bounce, "trend_pull", "dip_bounce")
+    add_entry_v2(d, MIN_RR)
     return d
 
 
 def backtest(d: pd.DataFrame, fee_side: float, bull_trail_atr: float, label: str,
              stop_mult: float = CHANDELIER, use_roi: bool = True, range_tp_min: float = 0.003,
-             allowed_regimes=(-1, 0, 1), er_max: float = 1.0):
+             allowed_regimes=(-1, 0, 1), er_max: float = 1.0, entry_col: str = "enter"):
     """Simula 1 posizione alla volta, long-only. fee_side = costo per lato (fee+slippage).
     stop_mult: ampiezza stop (×ATR). use_roi: attiva il take-profit fisso veloce.
     range_tp_min: profitto minimo per uscire alla banda in range.
@@ -85,66 +122,60 @@ def backtest(d: pd.DataFrame, fee_side: float, bull_trail_atr: float, label: str
     peak = 1.0
     max_dd = 0.0
     trades = []
-    i = 1
     n = len(d)
     cooldown_until = 0
 
+    # numpy per velocità: d.iloc[i] per-riga è ~100× più lento su 191k candele 15m.
+    enter_a = d[entry_col].to_numpy()
+    atr_a   = d["atr"].to_numpy()
+    reg_a   = d["regime"].to_numpy()
+    er_a    = d["er"].to_numpy()
+    open_a  = d["open"].to_numpy()
+    high_a  = d["high"].to_numpy()
+    low_a   = d["low"].to_numpy()
+    close_a = d["close"].to_numpy()
+    rsi_a   = d["rsi"].to_numpy()
+    bbup_a  = d["bb_up"].to_numpy()
+    tag_a   = d["enter_tag"].to_numpy()
+    date_a  = d["date"].to_numpy()
+    allowed = set(allowed_regimes)
+
+    i = 1
     while i < n - 1:
-        row = d.iloc[i]
-        if (row["enter"] != 1 or i < cooldown_until or not np.isfinite(row["atr"]) or row["atr"] <= 0
-                or int(row["regime"]) not in allowed_regimes or row["er"] > er_max):
+        if (enter_a[i] != 1 or i < cooldown_until or not np.isfinite(atr_a[i]) or atr_a[i] <= 0
+                or int(reg_a[i]) not in allowed or er_a[i] > er_max):
             i += 1
             continue
-        # ingresso all'OPEN della candela successiva (no lookahead)
-        entry = d.iloc[i + 1]["open"]
-        entry *= (1 + fee_side)                       # costo d'ingresso
+        entry = open_a[i + 1] * (1 + fee_side)        # ingresso all'OPEN della candela dopo (no lookahead)
         max_rate = entry
         bars = 0
         exit_price = None
         reason = None
         j = i + 1
         while j < n:
-            c = d.iloc[j]
-            atr_j = c["atr"] if np.isfinite(c["atr"]) and c["atr"] > 0 else 0.0
-            max_rate = max(max_rate, c["high"])
+            atr_j = atr_a[j] if np.isfinite(atr_a[j]) and atr_a[j] > 0 else 0.0
+            if high_a[j] > max_rate:
+                max_rate = high_a[j]
             bars += 1
             stop_price = max_rate - stop_mult * atr_j
-            # 1) STOP per primo (pessimista)
-            if atr_j > 0 and c["low"] <= stop_price:
-                exit_price = stop_price
-                reason = "stop"
-                break
-            prof_high = (c["high"] - entry) / entry
-            # 2) TAKE-PROFIT adattivo
-            if c["regime"] == 1:
+            if atr_j > 0 and low_a[j] <= stop_price:            # 1) STOP per primo (pessimista)
+                exit_price = stop_price; reason = "stop"; break
+            prof_high = (high_a[j] - entry) / entry
+            if reg_a[j] == 1:                                   # 2) TAKE-PROFIT adattivo
                 trail = max_rate - bull_trail_atr * atr_j
-                if prof_high >= 0.010 and c["low"] <= trail and atr_j > 0:
-                    exit_price = trail
-                    reason = "trail_bull"
-                    break
-                if c["rsi"] > BULL_RSI_EXIT:
-                    exit_price = c["close"]
-                    reason = "rsi_bull"
-                    break
+                if prof_high >= 0.010 and low_a[j] <= trail and atr_j > 0:
+                    exit_price = trail; reason = "trail_bull"; break
+                if rsi_a[j] > BULL_RSI_EXIT:
+                    exit_price = close_a[j]; reason = "rsi_bull"; break
             else:
-                if c["high"] >= c["bb_up"] and (c["bb_up"] - entry) / entry >= range_tp_min:
-                    exit_price = c["bb_up"]
-                    reason = "tp_band"
-                    break
-                if c["rsi"] > RSI_HI and (c["close"] - entry) / entry >= range_tp_min:
-                    exit_price = c["close"]
-                    reason = "tp_rsi"
-                    break
-            # 3) ROI fallback (opzionale)
-            if use_roi and bars >= ROI_BARS and (c["close"] - entry) / entry >= ROI_PROFIT:
-                exit_price = c["close"]
-                reason = "roi"
-                break
-            # 4) uscita a segnale (regime -1) solo se in profitto (exit_profit_only)
-            if c["regime"] == -1 and (c["close"] - entry) / entry > 0:
-                exit_price = c["close"]
-                reason = "signal_bear"
-                break
+                if high_a[j] >= bbup_a[j] and (bbup_a[j] - entry) / entry >= range_tp_min:
+                    exit_price = bbup_a[j]; reason = "tp_band"; break
+                if rsi_a[j] > RSI_HI and (close_a[j] - entry) / entry >= range_tp_min:
+                    exit_price = close_a[j]; reason = "tp_rsi"; break
+            if use_roi and bars >= ROI_BARS and (close_a[j] - entry) / entry >= ROI_PROFIT:
+                exit_price = close_a[j]; reason = "roi"; break       # 3) ROI fallback (opzionale)
+            if reg_a[j] == -1 and (close_a[j] - entry) / entry > 0:
+                exit_price = close_a[j]; reason = "signal_bear"; break  # 4) uscita a segnale, solo in profitto
             j += 1
         if exit_price is None:                        # trade ancora aperto a fine dati
             break
@@ -154,8 +185,7 @@ def backtest(d: pd.DataFrame, fee_side: float, bull_trail_atr: float, label: str
         peak = max(peak, equity)
         max_dd = min(max_dd, equity / peak - 1)
         trades.append({"ret": ret, "bars": bars, "reason": reason,
-                       "tag": row["enter_tag"], "regime": int(row["regime"]),
-                       "date": row["date"]})
+                       "tag": tag_a[i], "regime": int(reg_a[i]), "date": date_a[i]})
         cooldown_until = j + COOLDOWN
         i = j + 1
 
@@ -187,8 +217,15 @@ def show(m):
 
 
 def main():
-    df = pd.read_csv(DATA, parse_dates=["date"]).sort_values("date").reset_index(drop=True)
-    d = build(df)
+    import argparse
+    ap = argparse.ArgumentParser(description="Backtest V-Bounce. Default: dati 1h + HTF 4h. "
+                                 "Per il 15m reale: --data ...SOL_USDT-15m.csv --htf 1h")
+    ap.add_argument("--data", default=str(DATA))
+    ap.add_argument("--htf", default="4h", help="timeframe del filtro trend: 4h per dati 1h, 1h per dati 15m")
+    args = ap.parse_args()
+    df = pd.read_csv(args.data, parse_dates=["date"]).sort_values("date").reset_index(drop=True)
+    print(f"# Dati: {args.data}  |  HTF filtro: {args.htf}  |  candele: {len(df)}")
+    d = build(df, htf_rule=args.htf)
     d = d.iloc[700:].reset_index(drop=True)           # startup_candle_count
     split = pd.Timestamp("2024-06-01", tz="UTC")
     ins = d[d["date"] < split].reset_index(drop=True)
@@ -234,8 +271,26 @@ def main():
         b = backtest(oos, FEE, 3.0, "", **kw)
         print(f"{name:>26} | {a['pf']:6.2f} {a['exp']:+6.2f}% | {b['pf']:6.2f} {b['exp']:+6.2f}% {b['ret']:+7.1f}%")
 
+    print("\n" + "=" * 70)
+    print("### 5) NUOVA LOGICA v2: R:R + HTF(4h) + veto-coltello — il fix dell'ASIMMETRIA")
+    print("    (toglie enough_room/bb_not_falling, aggiunge R:R, trend 4h, knife-veto)")
+    print(f"{'variante':>30} | {'IS pf':>6} {'IS exp':>7} | {'OOS pf':>6} {'OOS exp':>7} {'OOS ret':>8}")
+    a = backtest(ins, FEE, 3.0, "", entry_col="enter")
+    b = backtest(oos, FEE, 3.0, "", entry_col="enter")
+    print(f"{'v1 baseline (attuale)':>30} | {a['pf']:6.2f} {a['exp']:+6.2f}% | "
+          f"{b['pf']:6.2f} {b['exp']:+6.2f}% {b['ret']:+7.1f}%  (n_oos={b['n']})")
+    for rr in (1.0, 1.3, 1.5):
+        add_entry_v2(ins, rr)
+        add_entry_v2(oos, rr)
+        a = backtest(ins, FEE, 3.0, "", entry_col="enter_v2")
+        b = backtest(oos, FEE, 3.0, "", entry_col="enter_v2")
+        name = f"v2  R:R>={rr} +HTF +knife"
+        print(f"{name:>30} | {a['pf']:6.2f} {a['exp']:+6.2f}% | "
+              f"{b['pf']:6.2f} {b['exp']:+6.2f}% {b['ret']:+7.1f}%  (n_oos={b['n']})")
+
     print("\nNB: nessun parametro è stato 'ottimizzato per vincere'. Una variante che è")
     print("    positiva IN-SAMPLE ma NEGATIVA out-of-sample = fortuna/overfit, non edge.")
+    print("    Cerca: PF più vicino a 1.0 E avg-win/avg-loss meno asimmetrico, IS e OOS insieme.")
 
 
 if __name__ == "__main__":
