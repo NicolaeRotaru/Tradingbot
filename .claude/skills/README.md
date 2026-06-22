@@ -10,6 +10,7 @@ In una sessione Claude Code su questo repo, scrivi `/<nome>` (es. `/stato`).
 | `/cambia-strategia` | Passa TREND ⇄ ENSEMBLE (compra basso/vende alto) | genera comandi per il VPS |
 | `/telefono` | Apri la dashboard/grafico da telefono o PC | genera comandi (tunnel SSH / Telegram) |
 | `/backtest` | Backtest onesto su dati reali SOL (rend, DD, Calmar, OOS) | gira nell'ambiente Claude |
+| `/deep-ml` | Addestra una rete neurale (LSTM/Transformer) come meta-labeler, con leva controllata; adotta solo se batte la baseline OOS | training sul PC/VPS (serve `torch`) |
 
 ## Perché alcune "generano comandi" invece di eseguire
 L'ambiente Claude raggiunge **GitHub** ma **non** il VPS né gli exchange. Le skill di
