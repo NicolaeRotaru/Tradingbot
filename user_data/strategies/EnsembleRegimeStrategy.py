@@ -3,9 +3,9 @@
 EnsembleRegimeStrategy — bot a commutazione di regime, 15m, SOL/USD:USD.
 
   USCITA — ADATTIVA per regime:
-    BULL (+1)  TRAILING  : linea VERDE sale con ogni candela (max_high×3 − 1×ATR).
-                           Esce solo quando il prezzo scende a toccarla (profit ≥1%).
-                           Cattura tutto il movimento bull senza uscire sul rumore.
+    BULL (+1)  TRAILING  : linea VERDE trailing sotto i massimi (max_high − 2.5×ATR).
+                           Esce solo quando il prezzo ritraccia 2.5×ATR dal max (profit ≥1%).
+                           Lascia correre tutto il trend bull senza uscire sul rumore.
     RANGE >EMA50 (0)    : linea VERDE a bb_up (mean reversion piena).
     RANGE <EMA50 (0)    : linea VERDE a bb_mid (rimbalzi più corti → target compresso).
     BEAR (-1)  SEGNALE  : esce su segnale regime; nessun nuovo ingresso in bear.
@@ -49,6 +49,7 @@ class EnsembleRegimeStrategy(IStrategy):
     # ===== stop-loss (linea ROSSA, uguale per tutti i trade) =====
     chandelier_long = 3.0    # stop = max_close - 3*ATR (linea rossa). Stretto = rischio ~1-2% per scalp 1%
     chandelier_short = 3.0
+    bull_trail_atr = 2.5     # BULL: la VERDE esce solo se il prezzo ritraccia 2.5×ATR dal max → lascia correre il trend
 
     # ===== soglie RSI =====
     mr_rsi_lo = 42.0         # RSI sotto questa soglia = dip → ingresso
@@ -65,9 +66,11 @@ class EnsembleRegimeStrategy(IStrategy):
     exit_profit_only = True
     startup_candle_count = 700
 
-    # custom_exit vende a bb_up se profit >= 0.3% (copre fees, punta a 1.5-3%).
-    # Fallback: dopo 2h (8 candele 15m) accetta qualsiasi +0.5%.
-    minimal_roi = {"0": 100.0, "120": 0.005}
+    # custom_exit gestisce TUTTE le uscite in profitto (target range + trailing bull).
+    # ROI temporale DISATTIVATO: il vecchio {"120": 0.005} chiudeva i trade bull a +0.5%
+    # dopo 2h, troncando proprio i trend che vogliamo cavalcare. Ora il bull corre fino
+    # al trailing stop (2.5×ATR) o al cambio di regime; il range esce al target/stop.
+    minimal_roi = {"0": 100.0}
     stoploss = -0.05
     use_custom_stoploss = True
     trailing_stop = False
@@ -150,7 +153,7 @@ class EnsembleRegimeStrategy(IStrategy):
         #                → la linea "tocca" i massimi salendo con il prezzo in bull.
         # RANGE >EMA50 : bb_up (target pieno: mean reversion classica).
         # RANGE <EMA50 : bb_mid (rimbalzi più corti in contesto ribassista → target compresso).
-        trail_bull = d["high"].rolling(3).max() - 1.0 * d["atr"]
+        trail_bull = d["high"].rolling(3).max() - self.bull_trail_atr * d["atr"]
         range_tp   = np.where(d["close"] > d["ema50"], d["bb_up"], d["bb_mid"])
         d["take_profit"] = np.where(d["regime"] == 1, trail_bull, range_tp)
         d["stop_loss"]   = d["close"] - self.chandelier_long * d["atr"]
@@ -252,16 +255,14 @@ class EnsembleRegimeStrategy(IStrategy):
 
         if not trade.is_short:
             if last["regime"] == 1 and atr:
-                # BULL — trailing TP: la linea verde sale con le candele.
-                # Esce quando il prezzo scende 1×ATR sotto il massimo del trade.
-                # Minimo +1% per non uscire sul normale rumore di mercato.
+                # BULL — lascia correre il trend. La linea verde (trailing) sale con i
+                # massimi; si esce SOLO quando il prezzo ritraccia bull_trail_atr×ATR dal
+                # massimo del trade, dopo almeno +1%. Niente cap RSI: in un bull forte
+                # l'RSI resta >78 a lungo e uscire lì tronca proprio la corsa da cavalcare.
                 if current_profit >= 0.010:
-                    trail_level = trade.max_rate - atr
+                    trail_level = trade.max_rate - self.bull_trail_atr * atr
                     if current_rate <= trail_level:
                         return "trail_bull"
-                # RSI estremo anche in bull: compratori esauriti
-                if last["rsi"] > 78:
-                    return "take_profit"
             else:
                 # RANGE / BEAR — target adattivo (pre-calcolato in populate_indicators):
                 #   close > EMA50 → bb_up (rimbalzo pieno)
