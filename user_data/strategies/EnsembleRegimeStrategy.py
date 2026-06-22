@@ -55,9 +55,9 @@ class EnsembleRegimeStrategy(IStrategy):
     exit_profit_only = True
     startup_candle_count = 700
 
-    # ROI disabilitato: il take-profit MR è gestito da custom_exit (bb_up).
-    # Dopo 3 ore di trade aperto, accetta qualsiasi +1% come fallback.
-    minimal_roi = {"0": 100.0, "180": 0.01}
+    # custom_exit vende a bb_up se profit >= 1% (punta a 1.5-3%).
+    # Fallback: dopo 2h (8 candele 15m) accetta qualsiasi +1%.
+    minimal_roi = {"0": 100.0, "120": 0.01}
     stoploss = -0.05
     use_custom_stoploss = True
     trailing_stop = False
@@ -143,16 +143,15 @@ class EnsembleRegimeStrategy(IStrategy):
         # TREND LONG: regime rialzista
         d.loc[(d["regime"] == 1) & (d["volume"] > 0), ["enter_long", "enter_tag"]] = (1, "trend_long")
 
-        # MEAN-REVERSION LONG:
-        #   ema50 > ema200      → macro trend su (BLOCCA tutto il downtrend giugno 2-8!)
-        #   close < bb_mid      → metà bassa del canale (compra basso)
-        #   rsi < 42            → dip moderato
-        #   close > open        → candela VERDE corrente (rimbalzo in corso, non coltello che cade)
-        #   rsi > rsi[-2]       → RSI in recupero da minimo (conferma della svolta)
+        # MEAN-REVERSION LONG: compra il dip quando il mercato è laterale (regime 0).
+        #   regime == 0   → non in trend forte (nè su nè giù)
+        #   close < bb_mid → metà bassa del canale = "compra basso"
+        #   rsi < 42       → dip moderato (non serve ipervenduto estremo)
+        #   close > open   → candela verde = rimbalzo già iniziato, non coltello che cade
+        #   rsi > rsi[-2]  → RSI sta risalendo dal minimo (conferma della svolta)
         if self.enable_mr:
             d.loc[
                 (d["regime"] == 0)
-                & (d["ema50"] > d["ema200"])
                 & (d["close"] < d["bb_mid"])
                 & (d["rsi"] < self.mr_rsi_lo)
                 & (d["close"] > d["open"])
@@ -177,10 +176,12 @@ class EnsembleRegimeStrategy(IStrategy):
     # ---------------- USCITE A SEGNALE ----------------
     def populate_exit_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         d = dataframe
-        # trend long: regime cambia (exit_profit_only=True → solo se in profitto)
-        d.loc[(d["regime"] != 1) & (d["close"] < d["ema200"]) & (d["volume"] > 0), "exit_long"] = 1
+        # Esce solo quando il regime diventa FORTEMENTE RIBASSISTA (-1).
+        # Prima era "regime != 1" → scattava su quasi ogni candela (781 exit sul grafico!).
+        # Ora è "regime == -1" → si attiva solo nei veri trend giù confermati.
+        d.loc[(d["regime"] == -1) & (d["volume"] > 0), "exit_long"] = 1
         if self.enable_shorts:
-            d.loc[(d["regime"] != -1) & (d["close"] > d["ema200"]) & (d["volume"] > 0), "exit_short"] = 1
+            d.loc[(d["regime"] == 1) & (d["volume"] > 0), "exit_short"] = 1
         return dataframe
 
     # ---------------- TAKE-PROFIT MR (i cerchi!) ----------------
@@ -188,8 +189,8 @@ class EnsembleRegimeStrategy(IStrategy):
         if not str(trade.enter_tag or "").startswith("mr"):
             return None  # i trade di trend vengono gestiti da Chandelier
 
-        # non uscire mai flat o in perdita: aspetta almeno +0.3%
-        if current_profit < 0.003:
+        # non uscire finché non siamo almeno a +1%: il target è bb_up, non un micro-gain
+        if current_profit < 0.010:
             return None
 
         df, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
