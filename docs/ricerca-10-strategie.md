@@ -142,3 +142,66 @@ ripetutamente: il backtest reale dà expectancy **negativa**.
 > lunga di settimane ≥10%. **Chiunque prometta 10%/sett con stop basso vende fumo** — o,
 > peggio, ti mette a leva e ti liquida. L'obiettivo realistico resta: trend-following 4h
 > long-only per un rendimento ≈ Buy & Hold con drawdown molto più basso.
+
+---
+
+# Ricerca — altre 22 tecniche (32 totali): il vincitore robusto
+
+> Richiesta: "testa altre 20 strategie/tecniche". Fatte 22 (oltre alle 10 base).
+> Script: `scripts/test_20_techniques.py`. Tecniche: Supertrend, Hull MA, TEMA, Ichimoku,
+> Parabolic SAR, Vortex, Stocastico, CCI, Williams %R, ROC, Awesome Oscillator,
+> MACD-hist, RSI2 Connors, Bollinger %B, Z-score, Williams Vix Fix, OBV, Chaikin Money
+> Flow, Volatility targeting, Ensemble multi-TF, Donchian+filtro, Heikin-Ashi.
+
+⚠ **Multiple-testing**: con 44 test (22 tecniche × 2 timeframe), qualcuno sembra buono per
+puro caso. Conta solo ciò che ha logica economica, è positivo in PIÙ anni, batte B&H, e
+ha un INTORNO di parametri positivo (non un singolo punto).
+
+## Risultato — convergenza sul trend-following multi-livello
+
+Quasi tutte le tecniche vincono IS (2021-23, mega-bull) e degradano OOS (2024-26, choppy).
+Questo è il marchio del trend-following: brilla nei trend forti, soffre nel laterale.
+**Mostrando IS/OOS/FULL insieme** (niente scarto cieco), emerge un vincitore netto:
+
+| Tecnica (4h) | IS Sharpe | OOS Sharpe | OOS ret | FULL ret | MaxDD | verdetto |
+|---|---:|---:|---:|---:|---:|---|
+| **20. Ensemble multi-TF** | 1,52 | **0,69** | **+66%** | +2133% | -57% | ✅ migliore |
+| 9. Williams %R | 0,98 | 0,49 | +33% | +431% | -71% | ✅ |
+| 21. Donchian+filtro EMA200 | 1,19 | 0,28 | +9% | +523% | -57% | ✅ |
+| 2. Hull MA 20/50 | 0,92 | 0,26 | -5% | +222% | -64% | ✅ marginale |
+| Buy & Hold | 1,24 | 0,25 | -29% | +560% | -97% | riferimento |
+
+**Ensemble multi-TF** = long solo quando EMA20>50 **E** EMA100>200 concordano. È il
+trend-following più selettivo (solo 65 trade in 5 anni): resta fuori da SOL nel chop/bear,
+dentro solo nei trend confermati su due scale.
+
+## Robustezza dell'Ensemble — 9/9 varianti battono B&H OOS
+
+`scripts/test_20_techniques.py` + griglia parametri:
+
+| Parametri EMA | OOS Sharpe | OOS ret | FULL ret |
+|---|---:|---:|---:|
+| (20/50)&(80/200) | **0,76** | +80% | +2233% |
+| (25/50)&(100/200) | 0,69 | +68% | +2359% |
+| (20/50)&(100/200) | 0,69 | +66% | +2133% |
+| (20/60)&(100/200) | 0,65 | +60% | +2567% |
+| ...altre 5 varianti | 0,40-0,57 | +22-46% | +885-1676% |
+
+**9 su 9** battono Buy & Hold OOS → l'edge è un INTORNO robusto, non curve-fitting.
+La logica è economica e chiara: due livelli di trend che concordano filtrano il rumore.
+
+## Verdetto finale dopo 32 strategie testate
+
+> **Il vincitore robusto su SOL è il trend-following multi-livello (Ensemble multi-TF) su 4h:
+> ~78% CAGR full, MaxDD -57% (vs -97% di Buy & Hold), batte B&H sia in rendimento grezzo
+> che risk-adjusted, OOS, con 9/9 varianti positive.**
+
+Caveat onesti che restano:
+- **Campione sottile**: ~25-30 trade OOS → lo Sharpe ha barre d'errore ampie. Il +66% OOS è
+  incoraggiante ma non "certezza statistica". Va confermato in dry-run forward.
+- **È difensivo**: ~78% CAGR è ottimo per crypto, ma è **78%/anno, non +14.100%/anno** del
+  target "10%/settimana". Nessuna delle 32 strategie si avvicina a quel numero.
+- Funziona perché STA FUORI nei momenti brutti (2022, parte 2025), non perché indovina i top.
+
+**Questa è la strategia da costruire come bot reale**: Ensemble multi-TF trend-agreement su
+4h, long-only. Aspettativa realistica e documentata, niente fumo.
