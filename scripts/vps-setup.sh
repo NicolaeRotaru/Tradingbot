@@ -40,7 +40,11 @@ else
 fi
 cd "${DIR}"
 
-echo "==> 3/4 Avvio del bot in dry-run..."
+echo "==> 3/4 Permessi user_data (l'utente Docker non e' root) + avvio dry-run..."
+# La cartella clonata da root non e' scrivibile dall'utente del container (uid 1000):
+# senza questo il bot non riesce a creare il log e va in Restarting. Fix una volta per tutte.
+mkdir -p user_data/logs
+chown -R 1000:1000 user_data 2>/dev/null || true
 docker compose -f "${COMPOSE}" up -d
 
 echo "==> 4/4 Stato dei container:"
