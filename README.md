@@ -54,6 +54,10 @@ Guida completa (backtest, dry-run, passaggio al live con 50€):
   passo-passo per far girare il bot SOL in **paper trading** sul tuo PC con
   **Docker Desktop** + dashboard **FreqUI** (soldi simulati, nessun rischio).
   Avvio: `docker compose -f docker-compose-sol.yml up -d`.
+- ☁️ **[Hosting su VPS (24/7)](docs/vps-hosting.md)** — sposta il bot su un
+  piccolo server cloud sempre acceso, così gira **indipendente dal tuo PC**.
+  Stesso Docker, accesso sicuro a FreqUI via tunnel SSH. Bootstrap in un
+  comando: `scripts/vps-setup.sh`.
 - ⚖️ **[Realtà rendimenti e rischio](docs/realta-rendimenti-e-rischio.md)** — la
   lettura ONESTA: perché il "+10.000%" era **lookahead** (numero falso), la
   differenza in-sample vs **fuori campione**, il trade-off leva/drawdown e perché
