@@ -2,11 +2,11 @@
     "$schema": "https://schema.freqtrade.io/schema.json",
     "bot_name": "ensemble-regime-bot",
 
-    "_commento": "Bot POTENZIATO a commutazione di regime (EnsembleRegimeStrategy): trend-long quando sale, mean-reversion (compra basso/vende alto) quando e' laterale; lo short di trend e' DISATTIVATO di default nella strategia (su SOL peggiora). DRY-RUN di default (soldi simulati, 500). Kraken Futures, SOL/USD:USD, leva 1x. Validato walk-forward out-of-sample: vedi docs/potenziamento-risultati.md. Per il LIVE: chiavi futures.kraken.com (solo trading, NO prelievo) nel .env e dry_run:false. ATTENZIONE: futures = margine; qui leva 1x per evitare liquidazioni.",
+    "_commento": "Bot a commutazione di regime (EnsembleRegimeStrategy): V-Bounce (compra il dip = cerchi verdi), vende al top (trailing ratchet in bull, banda in range = cerchi blu), evita i falling-knife (filtri atr_veto + bb_not_falling = cerchi rossi). DRY-RUN (soldi simulati, 500). Kraken Futures, SOL/USD:USD. LEVA 10x isolated. NON CUMULATIVO: stake_amount fisso = 50 (ogni trade usa 50 di margine, notional 50x10=500 ~ wallet, i profitti NON aumentano la size). Rischio per trade allo stop ~2% prezzo = ~10 USD = ~2% del wallet. ATTENZIONE: 10x moltiplica x10 i guadagni E le perdite; su una strategia a edge negativo (vedi docs/ricerca-strategia.md) brucia capitale piu' in fretta. Tenere DRY-RUN per imparare. Per alzare l'esposizione: aumentare stake_amount (50=sicuro notional~wallet, 100=2x wallet, ...). Per il LIVE servono chiavi futures.kraken.com (solo trading, NO prelievo) e dry_run:false.",
 
     "max_open_trades": 1,
     "stake_currency": "USD",
-    "stake_amount": "unlimited",
+    "stake_amount": 50,
     "tradable_balance_ratio": 0.95,
     "fiat_display_currency": "EUR",
 

@@ -71,7 +71,10 @@ class EnsembleRegimeStrategy(IStrategy):
     # dopo 2h, troncando proprio i trend che vogliamo cavalcare. Ora il bull corre fino
     # al trailing stop (2.5×ATR) o al cambio di regime; il range esce al target/stop.
     minimal_roi = {"0": 100.0}
-    stoploss = -0.05
+    # A 10x la stoploss STATICA di Freqtrade è sul P&L LEVERATO: -0.50 = -5% di PREZZO,
+    # un paracadute DENTRO la liquidazione (~-10% di prezzo a 10x isolated). Lo stop vero
+    # è il Chandelier custom (stoploss_from_absolute con leverage → ~2% prezzo, leva-corretto).
+    stoploss = -0.50
     use_custom_stoploss = True
     trailing_stop = False
 
@@ -80,7 +83,9 @@ class EnsembleRegimeStrategy(IStrategy):
         "stoploss": "market", "stoploss_on_exchange": False,
     }
 
-    leverage_num = 1.0
+    leverage_num = 10.0      # leva 10x (futures isolated). Sicurezza = stake fisso piccolo
+                             # nella config: notional = stake×10 ≈ wallet → la leva è
+                             # efficienza di capitale, NON rischio extra. Vedi config-ensemble.json.
 
     # Sul grafico SOLO due linee: verde = take-profit, rossa = stop-loss.
     plot_config = {
