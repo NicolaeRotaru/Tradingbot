@@ -1,0 +1,68 @@
+# 📰 Intelligence oraria — TradeDesk OS
+#
+# Esegue ogni ora `python cervello/news.py`, che scarica le notizie crypto da fonti FREE
+# e APPENDE un log datato in Bot-Vault/90-Memoria-AI/news/AAAA-MM-GG.md.
+# Poi committa il log aggiornato (così la memoria del desk cresce da sola, ogni ora).
+#
+# Il senior `news-intelligence` legge e SINTETIZZA i catalizzatori e fa scattare le sentinelle.
+#
+# CHIAVI: news.py funziona senza chiavi. Se vuoi più fonti (es. CryptoPanic con token),
+# aggiungi i segreti nelle Settings del repo (Settings → Secrets → Actions) e referenziali sotto
+# come variabili d'ambiente. NON committare mai chiavi: restano nei GitHub Secrets / nel .env locale.
+#
+# ALTERNATIVE all'ingestion oraria (se non vuoi usare GitHub Actions):
+#   - cron locale:   0 * * * *  cd /path/Tradingbot && python cervello/news.py
+#   - n8n:           nodo Schedule (ogni ora) → Execute Command `python cervello/news.py`
+#   - Claude Code schedulato: un loop/cron che esegue news.py + il workflow scansione-news.js
+
+name: intel-orario
+
+on:
+  schedule:
+    - cron: "0 * * * *"   # ogni ora, al minuto 0 (UTC)
+  workflow_dispatch: {}    # avvio manuale dal tab Actions
+
+permissions:
+  contents: write          # serve per committare il log notizie aggiornato
+
+concurrency:
+  group: intel-orario
+  cancel-in-progress: false
+
+jobs:
+  raccogli-news:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Scarica le notizie crypto dell'ora
+        env:
+          # Opzionale: token CryptoPanic dai GitHub Secrets (mai in chiaro nel repo).
+          CRYPTOPANIC_TOKEN: ${{ secrets.CRYPTOPANIC_TOKEN }}
+        run: |
+          python cervello/news.py || echo "news.py ha degradato (rete/fonti non raggiungibili)"
+
+      - name: Committa il log notizie (se cambiato)
+        run: |
+          git config user.name  "tradedesk-os-bot"
+          git config user.email "actions@github.com"
+          git add Bot-Vault/90-Memoria-AI/news/ || true
+          if git diff --cached --quiet; then
+            echo "Nessuna novità nelle notizie: niente da committare."
+          else
+            git commit -m "chore(news): log notizie orario $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git push
+          fi
+
+      # In alternativa al commit, puoi caricare il log come artefatto (decommenta):
+      # - name: Carica il log come artefatto
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: news-log
+      #     path: Bot-Vault/90-Memoria-AI/news/
