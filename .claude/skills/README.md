@@ -23,4 +23,4 @@ analisi (`/backtest`) girano qui al 100%; quelle che toccano il VPS preparano il
 ## Costanti del progetto (usate dalle skill)
 - VPS: `root@162.55.51.250` — Docker, dry-run, 24/7.
 - Bot TREND: `docker-compose-sol.yml` · Bot ENSEMBLE: `docker-compose-ensemble.yml` (porta 8080, uno alla volta).
-- Dashboard: tunnel SSH → http://127.0.0.1:8080 (login `freqtrader` / `solbot123`).
+- Dashboard: tunnel SSH → http://127.0.0.1:8080 (login `freqtrader` / `tradedesk_paper_local`).

@@ -64,7 +64,7 @@ cat <<EOF
  lascia quella finestra aperta, poi nel browser vai su:
 
      http://127.0.0.1:8080
-     utente: freqtrader   password: solbot123
+     utente: freqtrader   password: tradedesk_paper_local  (default paper; cambiala nel .env)
 
  Comandi utili (sul VPS, dentro ~/Tradingbot):
    log dal vivo:  docker compose -f ${COMPOSE} logs -f

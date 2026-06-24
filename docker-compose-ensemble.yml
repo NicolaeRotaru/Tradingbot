@@ -5,7 +5,7 @@
 # STOP:    docker compose -f docker-compose-ensemble.yml down
 # UPDATE:  git pull  &&  docker compose -f docker-compose-ensemble.yml up -d
 #
-# Dashboard: http://127.0.0.1:8080  (utente: freqtrader / password: solbot123)
+# Dashboard: http://127.0.0.1:8080  (utente: freqtrader / password: da .env, default paper locale)
 #
 # IMPORTANTE: usa la porta 8080 come il bot SOL. NON avviarli insieme: prima
 # ferma l'altro  ->  docker compose -f docker-compose-sol.yml down
@@ -22,6 +22,12 @@ services:
       - "127.0.0.1:8080:8080"
     volumes:
       - "./user_data:/freqtrade/user_data"
+    # Credenziali FreqUI da .env (FREQTRADE__...); default SOLO per il paper locale. Vedi .env.example.
+    environment:
+      FREQTRADE__API_SERVER__USERNAME: "${FREQTRADE__API_SERVER__USERNAME:-freqtrader}"
+      FREQTRADE__API_SERVER__PASSWORD: "${FREQTRADE__API_SERVER__PASSWORD:-tradedesk_paper_local}"
+      FREQTRADE__EXCHANGE__KEY: "${FREQTRADE__EXCHANGE__KEY:-}"
+      FREQTRADE__EXCHANGE__SECRET: "${FREQTRADE__EXCHANGE__SECRET:-}"
     command: >
       trade
       --logfile /freqtrade/user_data/logs/ensemble.log
