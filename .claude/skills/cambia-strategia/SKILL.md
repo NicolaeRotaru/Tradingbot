@@ -26,6 +26,6 @@ cd ~/Tradingbot && docker compose -f docker-compose-ensemble.yml down && docker 
 ```
 
 ## Note
-- Sempre **dry-run**. Dashboard su 127.0.0.1:8080 (login `freqtrader`/`solbot123`).
+- Sempre **dry-run**. Dashboard su 127.0.0.1:8080 (login `freqtrader`/`tradedesk_paper_local`).
 - Dopo il cambio, gli indicatori sul grafico cambiano: l'ensemble mostra la linea **VERDE `bb_up`** (dove vende alto = i cerchi) e la **ROSSA `chan_stop`** (lo stop del trend).
 - Se dopo il cambio va in `Restarting`: è il fix permessi (già incluso sopra) — vedi skill `stato`.

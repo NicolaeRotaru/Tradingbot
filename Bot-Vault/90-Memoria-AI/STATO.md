@@ -28,3 +28,4 @@
 - 2026-06-24 — Creata l'org TradeDesk OS + radiografia eseguita e verificata.
 - 2026-06-24 — 🟢 Eseguito **gate anti-overfitting OOS** (`Bot-Vault/01-Strategia/GATE-OOS.md`).
 - 2026-06-24 — 🔴 Accodata azione "stop lato exchange + whitelist prelievi" (firma Nicola, prereq. live).
+- 2026-06-24 — 🟡 Hardening segreti FATTO: `solbot123`/placeholder fuori dai config → `.env` (FREQTRADE__). Nessun segreto nel repo.

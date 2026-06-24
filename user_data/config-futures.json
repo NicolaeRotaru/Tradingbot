@@ -66,11 +66,11 @@
         "listen_port": 8080,
         "verbosity": "error",
         "enable_openapi": false,
-        "jwt_secret_key": "CAMBIAMI_con_una_stringa_casuale_lunga",
-        "ws_token": "CAMBIAMI_token_websocket",
+        "jwt_secret_key": "",
+        "ws_token": "",
         "CORS_origins": [],
         "username": "freqtrader",
-        "password": "CAMBIAMI_password"
+        "password": ""
     },
 
     "initial_state": "running",

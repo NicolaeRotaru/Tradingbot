@@ -13,3 +13,7 @@
   si promuove senza walk-forward OOS positivo e prova oltre SOL. Difesa anti-overfitting strutturale.
 - 2026-06-24 · 🔴 · Accodata in AZIONI-IN-ATTESA #1: stop lato exchange + whitelist prelievi ·
   Prerequisito del live; non eseguita, in attesa di firma di Nicola.
+- 2026-06-24 · 🟡 · Hardening segreti: rimossi solbot123 e i placeholder "CAMBIAMI" dai 4 config
+  (user_data/config*.json → "") · Le credenziali FreqUI arrivano da .env (FREQTRADE__API_SERVER__...)
+  con default paper locale nei docker-compose; aggiornati docs/skills/.env.example/vps-setup.sh.
+  Nessuna modifica al rischio né al live (resta dry-run). Fatto sul branch di lavoro.
