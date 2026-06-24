@@ -15,9 +15,16 @@
 > Esegui `python cervello/diario.py metriche` per popolare. I trade PAPER vanno registrati col diario.
 
 ## Riferimento storico (backtest reale, NON performance live) — `results/research/summary.json`
-- SOL Trend-long OOS: total +11,4% · CAGR 4,5% · Calmar 0,19 · Sharpe 0,32 · DD −23,6% · win-rate 50,5%.
-- SOL Trend-long In-sample: Calmar 1,97 (degrado IS→OOS = promemoria anti-overfitting n.1).
+- **Walk-forward OOS (il numero onesto):** SOL **+42%** (Sharpe 0,49 · PF 1,03) · BTC **−3,7%** (PF 0,997) · ETH **−11%** (PF 0,995).
+- **Robustezza (deflated_sharpe, n_trials=400):** SOL 0,0028 · BTC 3,4e-6 · ETH 0,00044 → edge fragile, solo SOL.
+- SOL Trend-long "fixed" OOS: total +11,4% · Calmar 0,19 vs In-sample Calmar 1,97 (degrado = promemoria anti-overfitting n.1).
+
+## Esito radiografia 2026-06-24 (`consegne/audit/2026-06-24-radiografia.md`)
+- 🔴 3 bloccanti **solo per il LIVE** (stop lato exchange off, whitelist prelievi assente, no parità paper↔live).
+- 🟠 4 seri (overfit solo-SOL, segreti deboli nei config, no test/CI, costi backtest semplificati).
+- 🟡 4 minori. ❌ Refutato 1 falso positivo (look-ahead Bollinger). In **paper nessun rischio catastrofico**.
 
 ## Ultime mosse
-- 2026-06-24 — Creata l'organizzazione TradeDesk OS. Radiografia esplorativa del bot in `Briefing/`.
-  Prossima missione proposta: `radiografia-bot.js` + 3 mosse a maggior impatto.
+- 2026-06-24 — Creata l'org TradeDesk OS + radiografia eseguita e verificata.
+- 2026-06-24 — 🟢 Eseguito **gate anti-overfitting OOS** (`Bot-Vault/01-Strategia/GATE-OOS.md`).
+- 2026-06-24 — 🔴 Accodata azione "stop lato exchange + whitelist prelievi" (firma Nicola, prereq. live).

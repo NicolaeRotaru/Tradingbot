@@ -4,3 +4,4 @@
 > Formato: `AAAA-MM-GG · contesto · cosa ha funzionato o no · numero · lezione · #tag`
 
 ## Esiti
+2026-06-24 · radiografia · password "solbot123" e jwt "CAMBIAMI" nei config committati · pronta mossa 🟡 segreti→.env · lezione: zero segreti reali nel repo, anche deboli · #segreti #hardening
