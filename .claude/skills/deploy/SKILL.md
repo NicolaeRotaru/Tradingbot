@@ -10,7 +10,7 @@ Obiettivo: portare/aggiornare il bot sul VPS Hetzner, **sempre in DRY-RUN** (sol
 ## Contesto fisso
 - VPS: `root@162.55.51.250`, Ubuntu, Docker, repo clonato in `~/Tradingbot`.
 - Bot **TREND**: `docker-compose-sol.yml`. Bot **ENSEMBLE** (compra basso/vende alto): `docker-compose-ensemble.yml`.
-- Dashboard 127.0.0.1:8080, login `freqtrader`/`solbot123`. Mai esporre 8080; accesso via tunnel SSH (skill `telefono`).
+- Dashboard 127.0.0.1:8080, login `freqtrader`/`tradedesk_paper_local`. Mai esporre 8080; accesso via tunnel SSH (skill `telefono`).
 
 ## QUESTO ambiente NON raggiunge il VPS → genera comandi pronti
 Non eseguo io sul server. Fornisci all'utente i comandi esatti, un blocco alla volta, e chiedigli di incollare l'output per conferma.

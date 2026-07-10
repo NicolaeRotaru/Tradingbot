@@ -11,13 +11,13 @@ La dashboard FreqUI è legata a `127.0.0.1` sul VPS (sicuro, **non** esposta a I
 ```
 ssh -L 8080:127.0.0.1:8080 root@162.55.51.250
 ```
-Lascia aperta la finestra, poi browser → http://127.0.0.1:8080 (login `freqtrader` / `solbot123`).
+Lascia aperta la finestra, poi browser → http://127.0.0.1:8080 (login `freqtrader` / `tradedesk_paper_local`).
 
 ## Telefono Android (app Termux)
 1. Installa SSH (solo la prima volta): `pkg update` poi `pkg install openssh -y`
 2. Tunnel: `ssh -L 8080:127.0.0.1:8080 root@162.55.51.250`
 3. **NON chiudere Termux**: tendina notifiche → tocca **"Acquire wakelock"** (lo tiene vivo).
-4. Browser del telefono → http://127.0.0.1:8080 (login `freqtrader` / `solbot123`).
+4. Browser del telefono → http://127.0.0.1:8080 (login `freqtrader` / `tradedesk_paper_local`).
 
 ## Alternativa comoda da telefono: Telegram (notifiche push + comandi)
 Per il controllo quotidiano senza tunnel. Richiede:

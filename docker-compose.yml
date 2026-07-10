@@ -17,10 +17,17 @@ services:
       - "127.0.0.1:8080:8080"
     volumes:
       - "./user_data:/freqtrade/user_data"
-    # Per il LIVE: crea il file .env (vedi .env.example) e DECOMMENTA la riga sotto.
-    # In dry-run NON serve: lascia pure commentato.
-    # env_file:
-    #   - .env
+    # Credenziali FreqUI/API e (per il LIVE) chiavi exchange: lette da .env via FREQTRADE__...
+    # Il .env NON e' mai committato (vedi .env.example). I default qui sotto valgono SOLO per il
+    # paper locale (la dashboard e' gia' legata a 127.0.0.1). Per accesso esposto o LIVE: imposta
+    # valori forti nel file .env. In dry-run le chiavi exchange restano vuote: il bot funziona senza.
+    environment:
+      FREQTRADE__API_SERVER__USERNAME: "${FREQTRADE__API_SERVER__USERNAME:-freqtrader}"
+      FREQTRADE__API_SERVER__PASSWORD: "${FREQTRADE__API_SERVER__PASSWORD:-tradedesk_paper_local}"
+      FREQTRADE__API_SERVER__JWT_SECRET_KEY: "${FREQTRADE__API_SERVER__JWT_SECRET_KEY:-paper_local_jwt_change_in_env}"
+      FREQTRADE__API_SERVER__WS_TOKEN: "${FREQTRADE__API_SERVER__WS_TOKEN:-paper_local_ws_change_in_env}"
+      FREQTRADE__EXCHANGE__KEY: "${FREQTRADE__EXCHANGE__KEY:-}"
+      FREQTRADE__EXCHANGE__SECRET: "${FREQTRADE__EXCHANGE__SECRET:-}"
     command: >
       trade
       --logfile /freqtrade/user_data/logs/freqtrade.log

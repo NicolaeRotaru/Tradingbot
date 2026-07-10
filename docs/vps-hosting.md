@@ -4,7 +4,7 @@ Guida per principianti: far girare il bot SOL su un piccolo **server cloud sempr
 (VPS), così continua a lavorare anche con il tuo computer **spento**.
 
 > 🟢 Resta in **dry-run** (soldi simulati). Gira **lo stesso identico Docker** che hai già
-> usato sul PC. La password della dashboard (`solbot123`) è già nel progetto: sul VPS è
+> usato sul PC. La password della dashboard (`tradedesk_paper_local`) è già nel progetto: sul VPS è
 > **"clona e avvia"**, non devi modificare file.
 
 ---
@@ -90,7 +90,7 @@ Lascia quella finestra **aperta**, poi nel browser vai su:
 http://127.0.0.1:8080
 ```
 
-Login: utente **`freqtrader`**, password **`solbot123`**.
+Login: utente **`freqtrader`**, password **`tradedesk_paper_local`**.
 
 > In pratica: il tunnel collega "il porto 8080 del tuo PC" a "il porto 8080 del server",
 > passando dentro la connessione SSH cifrata. Chiudendo quella finestra, la dashboard non è

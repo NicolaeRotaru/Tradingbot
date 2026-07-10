@@ -31,3 +31,15 @@ venv/
 
 # Research artifacts rigenerabili (npz cache dei backtest)
 results/research/*.npz
+
+# === TradeDesk OS (secondo cervello) ===
+# Segreti aggiuntivi (oltre a .env già coperto sopra)
+*.key
+*.pem
+secret*
+secrets*
+*credentials*
+# Libro mastro del diario trade (dati locali, rigenerabili) — il template/struttura resta tracciata
+Bot-Vault/90-Memoria-AI/diario-trade.jsonl
+# Cache/temporanei
+.claude/settings.local.json

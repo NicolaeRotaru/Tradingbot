@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python cervello/diario.py:*)",
+      "Bash(python cervello/news.py:*)",
+      "Bash(python3 cervello/diario.py:*)",
+      "Bash(python3 cervello/news.py:*)",
+      "Read(./Bot-Vault/**)",
+      "Read(./cervello/**)",
+      "Read(./user_data/**)",
+      "Read(./research/**)",
+      "Read(./scripts/**)",
+      "Read(./consegne/**)",
+      "Read(./memoria-squadra/**)",
+      "WebSearch",
+      "WebFetch(domain:coindesk.com)",
+      "WebFetch(domain:cointelegraph.com)",
+      "WebFetch(domain:cryptopanic.com)",
+      "WebFetch(domain:alternative.me)",
+      "WebFetch(domain:api.coingecko.com)",
+      "WebFetch(domain:theblock.co)",
+      "WebFetch(domain:decrypt.co)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./**/*.key)",
+      "Read(./**/secret*)",
+      "Read(./user_data/config-private*.json)"
+    ]
+  }
+}

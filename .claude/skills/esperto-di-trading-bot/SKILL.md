@@ -22,7 +22,7 @@ i compromessi veri e dire sempre il passo successivo.
 ## Contesto fisso del progetto (sappilo a memoria)
 - **Framework:** Freqtrade in Docker, **dry-run** (paper trading) di default. Live disabilitato.
 - **VPS:** `root@162.55.51.250` — bot 24/7. Dashboard: tunnel SSH → http://127.0.0.1:8080
-  (login `freqtrader` / `solbot123`).
+  (login `freqtrader` / `tradedesk_paper_local`).
 - **Due bot, una sola porta 8080** (uno alla volta):
   | Bot | Compose | Strategia | Idea |
   |---|---|---|---|

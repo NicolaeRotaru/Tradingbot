@@ -13,7 +13,7 @@ in modo semplice e rassicurante.
 - Due bot possibili (uno alla volta, **stessa porta 8080**):
   - **TREND**: `docker-compose-sol.yml` → strategia `SolLongShortStrategy` (1h).
   - **ENSEMBLE "compra basso/vende alto"**: `docker-compose-ensemble.yml` → `EnsembleRegimeStrategy` (15m).
-- Dashboard: tunnel SSH → http://127.0.0.1:8080, login `freqtrader` / `solbot123`.
+- Dashboard: tunnel SSH → http://127.0.0.1:8080, login `freqtrader` / `tradedesk_paper_local`.
 
 ## IMPORTANTE: questo ambiente NON raggiunge il VPS
 Non posso eseguire i comandi sul server da qui. Quindi:
